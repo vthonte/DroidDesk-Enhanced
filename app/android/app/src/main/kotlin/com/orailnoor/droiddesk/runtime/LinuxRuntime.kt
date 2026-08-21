@@ -105,13 +105,48 @@ class LinuxRuntime(private val context: Context) {
             return directBash.exists() && directBash.canExecute()
         }
 
+    val isDirectTermuxActive: Boolean
+        get() = useDirectTermux && isDirectTermuxAccessible
+
     var useDirectTermux: Boolean
         get() = context.getSharedPreferences("droiddesk_prefs", Context.MODE_PRIVATE)
             .getBoolean("use_direct_termux", isDirectTermuxAccessible)
         set(value) {
             context.getSharedPreferences("droiddesk_prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean("use_direct_termux", value).apply()
+            if (value && isDirectTermuxAccessible) {
+                ensureNativeTermuxBinaries()
+            }
         }
+
+    fun ensureNativeTermuxBinaries() {
+        try {
+            val targetPrefix = if (isDirectTermuxAccessible) termuxDirectPrefix else prefixDir
+            val dpkgBin = File(targetPrefix, "bin/dpkg")
+            val dpkgReal = File(targetPrefix, "bin/dpkg.real")
+            if (dpkgReal.exists()) {
+                dpkgReal.renameTo(dpkgBin)
+                dpkgBin.setExecutable(true, false)
+                Log.i(TAG, "Restored native dpkg binary in Termux prefix")
+            }
+
+            val uaBin = File(targetPrefix, "bin/update-alternatives")
+            val uaReal = File(targetPrefix, "bin/update-alternatives.real")
+            if (uaReal.exists()) {
+                uaReal.renameTo(uaBin)
+                uaBin.setExecutable(true, false)
+                Log.i(TAG, "Restored native update-alternatives in Termux prefix")
+            }
+
+            val aptConf = File(targetPrefix, "etc/apt/apt.conf.d/99-droiddesk-paths.conf")
+            if (aptConf.exists()) {
+                aptConf.delete()
+                Log.i(TAG, "Removed standalone apt config override from Termux prefix")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to ensure native Termux binaries: ${e.message}")
+        }
+    }
 
     private val termuxDirectPrefix = File("/data/data/com.termux/files/usr")
     private val termuxDirectHome = File("/data/data/com.termux/files/home")
@@ -337,6 +372,13 @@ class LinuxRuntime(private val context: Context) {
     }
 
     fun extractBootstrapIfNeeded(context: Context) {
+        if (isDirectTermuxActive) {
+            Log.i(TAG, "Direct Termux link active. Ensuring clean native environment.")
+            ensureNativeTermuxBinaries()
+            ensureSocketHookPrebuilt()
+            return
+        }
+
         val bashBin = File(prefixDir, "bin/bash")
         if (bashBin.exists()) {
             Log.i(TAG, "Bootstrap already extracted at ${prefixDir.absolutePath}")
@@ -456,6 +498,13 @@ class LinuxRuntime(private val context: Context) {
     }
 
     private fun createAptConfigOverride() {
+        if (isDirectTermuxActive) {
+            val confFile = File(prefixDir, "etc/apt/apt.conf.d/99-droiddesk-paths.conf")
+            if (confFile.exists()) {
+                confFile.delete()
+            }
+            return
+        }
         try {
             val aptConfDir = File(prefixDir, "etc/apt/apt.conf.d")
             aptConfDir.mkdirs()
@@ -485,6 +534,10 @@ class LinuxRuntime(private val context: Context) {
     }
 
     private fun wrapDpkgForPath() {
+        if (isDirectTermuxActive) {
+            ensureNativeTermuxBinaries()
+            return
+        }
         try {
             val dpkgBin = File(prefixDir, "bin/dpkg")
             val dpkgReal = File(prefixDir, "bin/dpkg.real")
@@ -610,11 +663,15 @@ class LinuxRuntime(private val context: Context) {
     }
 
     private fun wrapUpdateAlternatives() {
+        if (isDirectTermuxActive) {
+            return
+        }
         try {
             val uaBin = File(prefixDir, "bin/update-alternatives")
             val uaReal = File(prefixDir, "bin/update-alternatives.real")
 
             if (!uaBin.exists() || uaReal.exists()) return
+
 
             uaBin.renameTo(uaReal)
             uaBin.writeText(
@@ -1153,10 +1210,13 @@ class LinuxRuntime(private val context: Context) {
         env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=${tmpDir.absolutePath}/dbus-session"
 
         env["DPKG_ADMINDIR"] = "${prefixDir.absolutePath}/var/lib/dpkg"
-        env["APT_CONFIG"] = "${prefixDir.absolutePath}/etc/apt/apt.conf.d/99-droiddesk-paths.conf"
+        val aptConfig = File(prefixDir, "etc/apt/apt.conf.d/99-droiddesk-paths.conf")
+        if (aptConfig.exists()) {
+            env["APT_CONFIG"] = aptConfig.absolutePath
+        }
 
         val hookSo = File(prefixDir, "lib/libsocket_hook.so")
-        if (hookSo.exists()) {
+        if (hookSo.exists() && !isDirectTermuxActive) {
             env["LD_PRELOAD"] = hookSo.absolutePath
         }
 
@@ -1166,6 +1226,13 @@ class LinuxRuntime(private val context: Context) {
     // ── Native Package Installation ──
 
     private fun installRepoPackages(): Boolean {
+        if (isDirectTermuxActive) {
+            if (executeCommand("apt-get update").startsWith("Error:")) {
+                Log.w(TAG, "apt-get update warning before installing repo packages")
+            }
+            return !executeCommand("apt-get install -y x11-repo tur-repo").startsWith("Error:")
+        }
+
         val pkgs = listOf("x11-repo", "tur-repo")
 
         // Ensure main package list is up to date before downloading the repo packages.
