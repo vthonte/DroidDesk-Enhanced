@@ -14,6 +14,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.orailnoor.droiddesk.MainActivity
 import com.orailnoor.droiddesk.runtime.AndroidAppBridge
+import com.orailnoor.droiddesk.runtime.ChrootRuntime
+import com.orailnoor.droiddesk.runtime.LinuxRuntime
 
 /**
  * Foreground service that keeps the Linux runtime alive.
@@ -27,9 +29,12 @@ class DroidDeskService : Service() {
     companion object {
         const val CHANNEL_ID = "droiddesk_service"
         const val NOTIFICATION_ID = 1001
+        const val ACTION_EXIT = "com.orailnoor.droiddesk.service.ACTION_EXIT"
+        const val ACTION_TOGGLE_WAKELOCK = "com.orailnoor.droiddesk.service.ACTION_TOGGLE_WAKELOCK"
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var isWakeLockActive = true
 
     override fun onCreate() {
         super.onCreate()
@@ -39,7 +44,25 @@ class DroidDeskService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = buildNotification("Linux desktop is running")
+        when (intent?.action) {
+            ACTION_EXIT -> {
+                shutdownAndExit()
+                return START_NOT_STICKY
+            }
+            ACTION_TOGGLE_WAKELOCK -> {
+                if (isWakeLockActive) {
+                    releaseWakeLock()
+                    isWakeLockActive = false
+                } else {
+                    acquireWakeLock()
+                    isWakeLockActive = true
+                }
+                updateNotification(if (isWakeLockActive) "Desktop running (WakeLock active)" else "Desktop running (WakeLock released)")
+                return START_STICKY
+            }
+        }
+
+        val notification = buildNotification(if (isWakeLockActive) "Desktop running (WakeLock active)" else "Desktop running")
 
         ServiceCompat.startForeground(
             this,
@@ -53,6 +76,19 @@ class DroidDeskService : Service() {
         )
 
         return START_STICKY
+    }
+
+    private fun shutdownAndExit() {
+        Thread {
+            try {
+                LinuxRuntime(this).stopSession()
+                ChrootRuntime(this).stopSession()
+            } catch (_: Throwable) {}
+            releaseWakeLock()
+            AndroidAppBridge.stop()
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }.start()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -81,10 +117,24 @@ class DroidDeskService : Service() {
     }
 
     private fun buildNotification(contentText: String): Notification {
-        val pendingIntent = PendingIntent.getActivity(
+        val openIntent = PendingIntent.getActivity(
             this,
             0,
             Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val exitIntent = PendingIntent.getService(
+            this,
+            1,
+            Intent(this, DroidDeskService::class.java).apply { action = ACTION_EXIT },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val wakeLockIntent = PendingIntent.getService(
+            this,
+            2,
+            Intent(this, DroidDeskService::class.java).apply { action = ACTION_TOGGLE_WAKELOCK },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
@@ -92,11 +142,21 @@ class DroidDeskService : Service() {
             .setContentTitle("DroidDesk")
             .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(openIntent)
             .setOngoing(true)
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(
+                android.R.drawable.ic_lock_idle_charging,
+                if (isWakeLockActive) "Release WakeLock" else "Acquire WakeLock",
+                wakeLockIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Exit",
+                exitIntent
+            )
             .build()
     }
 
@@ -110,11 +170,16 @@ class DroidDeskService : Service() {
 
     private fun acquireWakeLock() {
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "DroidDesk::LinuxRuntime"
-        ).apply {
-            acquire(Long.MAX_VALUE)  // Keep CPU alive
+        if (wakeLock == null) {
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "DroidDesk::LinuxRuntime"
+            )
+        }
+        wakeLock?.let {
+            if (!it.isHeld) {
+                it.acquire(Long.MAX_VALUE) // Keep CPU alive
+            }
         }
     }
 
