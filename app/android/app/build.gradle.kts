@@ -36,15 +36,25 @@ android {
         }
     }
 
+    signingConfigs {
+        create("termuxKey") {
+            storeFile = file("testkey_untrusted.jks")
+            storePassword = "xrj45yWGLbsO7W0v"
+            keyAlias = "alias"
+            keyPassword = "xrj45yWGLbsO7W0v"
+        }
+    }
+
     buildTypes {
         release {
-            // GitHub-distributed testing builds intentionally use Android's
-            // debug key so release APKs are directly installable.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("termuxKey")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("termuxKey")
         }
     }
 
