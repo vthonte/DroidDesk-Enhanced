@@ -58,11 +58,31 @@ class X11ServiceClient(
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-            if (active.get()) postError("The X11 service process disconnected", null)
+            if (active.get()) {
+                mainHandler.postDelayed({
+                    if (active.get()) {
+                        try {
+                            val intent = Intent(appContext, X11ServerService::class.java)
+                            appContext.startService(intent)
+                            bound = appContext.bindService(intent, this, Context.BIND_AUTO_CREATE)
+                        } catch (_: Exception) {}
+                    }
+                }, 300)
+            }
         }
 
         override fun onBindingDied(name: ComponentName) {
-            if (active.get()) postError("The X11 service binding died", null)
+            if (active.get()) {
+                mainHandler.postDelayed({
+                    if (active.get()) {
+                        try {
+                            val intent = Intent(appContext, X11ServerService::class.java)
+                            appContext.startService(intent)
+                            bound = appContext.bindService(intent, this, Context.BIND_AUTO_CREATE)
+                        } catch (_: Exception) {}
+                    }
+                }, 300)
+            }
         }
 
         override fun onNullBinding(name: ComponentName) {

@@ -626,7 +626,9 @@ class DesktopActivity : Activity() {
 
     private fun showX11Error(message: String, error: Throwable?) {
         Log.e(TAG, message, error)
-        Toast.makeText(this, "X11 Error: $message", Toast.LENGTH_LONG).show()
+        if (!isFinishing && !isDestroyed) {
+            Toast.makeText(this, "X11: $message", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showX11PreferencesDialog() {
