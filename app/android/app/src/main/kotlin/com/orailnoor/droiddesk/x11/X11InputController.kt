@@ -85,7 +85,7 @@ class X11InputController(private val lorieView: LorieView) {
             prefs.displayScale.put(scale)
         }
         prefs.adjustResolution.put(true)
-        lorieView.reloadPreferences()
+        lorieView.reloadPreferences(prefs)
         lorieView.triggerCallback()
     }
 
