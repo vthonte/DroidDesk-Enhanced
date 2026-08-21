@@ -405,7 +405,7 @@ class _DesktopToolsScreenState extends State<DesktopToolsScreen>
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Import your packages, dotfiles, and home directory from an exported backup tarball.\n\n'
                   'ℹ️ Note: This is a COPY operation (non-destructive). Your original Termux app remains intact. '
                   'Once imported and verified, you may delete or clear original Termux data to reclaim storage.',
@@ -441,7 +441,7 @@ class _DesktopToolsScreenState extends State<DesktopToolsScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Enter the file path of your exported Termux backup archive (created via export-termux-for-droiddesk.sh):',
               style: DroidTheme.bodySm,
             ),
@@ -462,10 +462,10 @@ class _DesktopToolsScreenState extends State<DesktopToolsScreen>
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: DroidTheme.primary.withValues(alpha: 0.3)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 16, color: DroidTheme.primary),
-                  SizedBox(width: 8),
+                  const Icon(Icons.info_outline_rounded, size: 16, color: DroidTheme.primary),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'This is a COPY operation. Your original Termux app and files will remain safe and intact.',
@@ -503,7 +503,7 @@ class _DesktopToolsScreenState extends State<DesktopToolsScreen>
                           Text('Import Successful!'),
                         ],
                       ),
-                      content: const Text(
+                      content: Text(
                         'Your Termux environment has been copied into DroidDesk.\n\n'
                         'ℹ️ Note: Original Termux files were NOT deleted.\n\n'
                         '💡 Recommendation: You can launch and test your desktop installation now. '

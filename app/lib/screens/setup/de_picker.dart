@@ -132,11 +132,9 @@ class DEPickerScreen extends StatelessWidget {
                             '${state.gpuType}',
                             style: DroidTheme.monoSm,
                             overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
                   ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
+                ],
+
                 // ── Termux Integration Option Card ──
                 _buildTermuxImportCard(context, state),
 
@@ -422,7 +420,7 @@ class DEPickerScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Enter the file path of your exported Termux backup archive (created via export-termux-for-droiddesk.sh):',
               style: DroidTheme.bodySm,
             ),
@@ -443,10 +441,10 @@ class DEPickerScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: DroidTheme.primary.withValues(alpha: 0.3)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded, size: 16, color: DroidTheme.primary),
-                  SizedBox(width: 8),
+                  const Icon(Icons.info_outline_rounded, size: 16, color: DroidTheme.primary),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'This is a COPY operation. Your original Termux app and files will remain safe and intact.',
@@ -484,7 +482,7 @@ class DEPickerScreen extends StatelessWidget {
                           Text('Import Successful!'),
                         ],
                       ),
-                      content: const Text(
+                      content: Text(
                         'Your Termux environment has been copied into DroidDesk.\n\n'
                         'ℹ️ Note: Original Termux files were NOT deleted.\n\n'
                         '💡 Recommendation: You can launch and test your desktop installation now. '
