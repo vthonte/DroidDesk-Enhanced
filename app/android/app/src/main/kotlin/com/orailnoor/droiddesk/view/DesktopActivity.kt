@@ -141,6 +141,14 @@ class DesktopActivity : Activity() {
         enableImmersiveMode()
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        enableImmersiveMode()
+        lorieView?.post {
+            lorieView?.triggerCallback()
+        }
+    }
+
     private fun startClipboardSync() {
         if (clipboardSync == null) {
             clipboardSync = if (sessionMode == "chroot") {
@@ -290,6 +298,36 @@ class DesktopActivity : Activity() {
             contentDescription = "Drag desktop controls"
             setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
         }
+        val scaleButton = controlButton("${inputController?.scalePercent ?: 100}%").apply {
+            contentDescription = "Change display scale"
+            setOnClickListener {
+                val newScale = inputController?.cycleScale() ?: 100
+                text = "${newScale}%"
+                Toast.makeText(this@DesktopActivity, "Display Scale: ${newScale}%", Toast.LENGTH_SHORT).show()
+            }
+        }
+        var orientationMode = 0 // 0: Auto, 1: Landscape, 2: Portrait
+        val orientationButton = controlButton("⟳ Auto").apply {
+            contentDescription = "Screen orientation lock"
+            setOnClickListener {
+                orientationMode = (orientationMode + 1) % 3
+                when (orientationMode) {
+                    0 -> {
+                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                        text = "⟳ Auto"
+                    }
+                    1 -> {
+                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                        text = "⟳ Land"
+                    }
+                    2 -> {
+                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        text = "⟳ Port"
+                    }
+                }
+                Toast.makeText(this@DesktopActivity, "Orientation: $text", Toast.LENGTH_SHORT).show()
+            }
+        }
         val keyboardButton = controlButton("Keyboard").apply {
             setOnClickListener { showKeyboard() }
         }
@@ -310,6 +348,12 @@ class DesktopActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(dragHandle, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, (42 * density).toInt(),
+            ))
+            addView(scaleButton, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, (42 * density).toInt(),
+            ))
+            addView(orientationButton, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, (42 * density).toInt(),
             ))
             addView(keyboardButton, LinearLayout.LayoutParams(

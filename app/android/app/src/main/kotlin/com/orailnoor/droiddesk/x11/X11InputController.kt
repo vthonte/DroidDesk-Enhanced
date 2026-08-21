@@ -1,6 +1,7 @@
 package com.orailnoor.droiddesk.x11
 
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import com.termux.x11.LorieView
 import com.termux.x11.MainActivity
@@ -14,7 +15,27 @@ class X11InputController(private val lorieView: LorieView) {
         InputEventSender(lorieView),
     )
 
+    private val scaleGestureDetector = ScaleGestureDetector(
+        MainActivity.getInstance(),
+        object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val factor = detector.scaleFactor
+                if (factor > 1.04f) {
+                    lorieView.adjustRendererZoom(8)
+                    return true
+                } else if (factor < 0.96f) {
+                    lorieView.adjustRendererZoom(-8)
+                    return true
+                }
+                return false
+            }
+        }
+    )
+
     var mode: Int = TouchInputHandler.InputMode.TRACKPAD
+        private set
+
+    var scalePercent: Int = DEFAULT_SCALE_PERCENT
         private set
 
     init {
@@ -43,6 +64,32 @@ class X11InputController(private val lorieView: LorieView) {
         else -> "Trackpad"
     }
 
+    fun cycleScale(): Int {
+        scalePercent = when (scalePercent) {
+            100 -> 125
+            125 -> 150
+            150 -> 200
+            else -> 100
+        }
+        applyScale(scalePercent)
+        return scalePercent
+    }
+
+    private fun applyScale(scale: Int) {
+        val prefs = MainActivity.getPrefs()
+        if (scale == 100) {
+            prefs.displayResolutionMode.put("native")
+            prefs.displayScale.put(100)
+        } else {
+            prefs.displayResolutionMode.put("scaled")
+            prefs.displayScale.put(scale)
+        }
+        prefs.adjustResolution.put(true)
+        lorieView.reloadPreferences()
+        lorieView.regenerateTransform()
+        lorieView.triggerCallback()
+    }
+
     fun dispose() {
         MainActivity.getInstance().setKeyHandler(null)
         lorieView.setOnTouchListener(null)
@@ -57,19 +104,32 @@ class X11InputController(private val lorieView: LorieView) {
         inputHandler.reloadPreferences(prefs)
     }
 
-    private fun handleMotionEvent(view: View, event: MotionEvent): Boolean =
-        inputHandler.handleTouchEvent(lorieView, view, event)
+    private fun handleMotionEvent(view: View, event: MotionEvent): Boolean {
+        if (event.pointerCount >= 2) {
+            scaleGestureDetector.onTouchEvent(event)
+            if (scaleGestureDetector.isInProgress) {
+                return true
+            }
+        }
+        return inputHandler.handleTouchEvent(lorieView, view, event)
+    }
 
     companion object {
-        const val DISPLAY_SCALE_PERCENT = 200
+        const val DEFAULT_SCALE_PERCENT = 100
 
         /** Must run before LorieView is measured so Xwayland starts at the scaled resolution. */
-        fun configureDisplayScale() {
+        fun configureDisplayScale(scale: Int = DEFAULT_SCALE_PERCENT) {
             MainActivity.getPrefs().apply {
-                displayResolutionMode.put("scaled")
-                displayScale.put(DISPLAY_SCALE_PERCENT)
+                if (scale == 100) {
+                    displayResolutionMode.put("native")
+                    displayScale.put(100)
+                } else {
+                    displayResolutionMode.put("scaled")
+                    displayScale.put(scale)
+                }
                 displayStretch.put(true)
                 scaleTouchpad.put(true)
+                adjustResolution.put(true)
             }
         }
     }
