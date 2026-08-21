@@ -133,21 +133,28 @@ class X11ServerService : Service() {
             } catch (_: Exception) {}
         }
 
-        // Also ensure Termux's standard /usr/tmp/.X11-unix links to appTmpDir/.X11-unix
+        // Purge and link .X11-unix directory symmetrically so both Termux clients and DroidDesk see X0
         try {
-            if (!termuxX11.exists()) {
-                try {
-                    Os.symlink(appX11Dir.absolutePath, termuxX11.absolutePath)
-                } catch (_: Exception) {
-                    termuxX11.mkdirs()
+            if (termuxTmp.exists()) {
+                if (termuxX11.exists() && !termuxX11.isSymlink()) {
+                    termuxX11.deleteRecursively()
+                }
+                if (!termuxX11.exists()) {
+                    try {
+                        Os.symlink(appX11Dir.absolutePath, termuxX11.absolutePath)
+                        Log.i(TAG, "Symlinked termux .X11-unix -> ${appX11Dir.absolutePath}")
+                    } catch (e: Exception) {
+                        termuxX11.mkdirs()
+                    }
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Could not link termux tmp directory: ${e.message}")
         }
 
-        Os.setenv("TMPDIR", appTmpDir.absolutePath, true)
-        Os.setenv("XDG_RUNTIME_DIR", appTmpDir.absolutePath, true)
+        val primaryTmp = if (termuxTmp.exists()) termuxTmp else appTmpDir
+        Os.setenv("TMPDIR", primaryTmp.absolutePath, true)
+        Os.setenv("XDG_RUNTIME_DIR", primaryTmp.absolutePath, true)
         Os.setenv("PREFIX", File(filesDir, "usr").absolutePath, true)
         Os.setenv("HOME", filesDir.absolutePath, true)
 
@@ -163,6 +170,15 @@ class X11ServerService : Service() {
             Os.setenv("XKB_CONFIG_ROOT", xkbRoot.absolutePath, true)
         } else {
             Log.w(TAG, "XKB config root not found")
+        }
+    }
+
+    private fun File.isSymlink(): Boolean {
+        return try {
+            val canon = if (parent == null) this else File(parentFile?.canonicalFile, name)
+            !canon.canonicalFile.equals(canon.absoluteFile)
+        } catch (_: Exception) {
+            false
         }
     }
 

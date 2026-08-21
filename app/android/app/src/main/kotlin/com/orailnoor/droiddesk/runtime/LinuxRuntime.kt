@@ -1936,16 +1936,22 @@ class LinuxRuntime(private val context: Context) {
         }
 
         // X11ServerService owns this socket. Never delete it from the client runtime.
-        File(tmpDir, ".X11-unix").mkdirs()
+        val appTmp = File(context.filesDir, "tmp").apply { mkdirs() }
+        val appX11 = File(appTmp, ".X11-unix").apply { mkdirs() }
+        val termuxTmp = File("/data/data/com.termux/files/usr/tmp").apply { mkdirs() }
+        val termuxX11 = File(termuxTmp, ".X11-unix")
+
         try {
-            val termuxTmp = File("/data/data/com.termux/files/usr/tmp").apply { mkdirs() }
-            val termuxX11 = File(termuxTmp, ".X11-unix")
-            val appX11 = File(tmpDir, ".X11-unix")
-            if (!termuxX11.exists()) {
-                try {
-                    Os.symlink(appX11.absolutePath, termuxX11.absolutePath)
-                } catch (_: Exception) {
-                    termuxX11.mkdirs()
+            if (termuxTmp.exists()) {
+                if (termuxX11.exists() && !termuxX11.isSymlink()) {
+                    termuxX11.deleteRecursively()
+                }
+                if (!termuxX11.exists()) {
+                    try {
+                        Os.symlink(appX11.absolutePath, termuxX11.absolutePath)
+                    } catch (_: Exception) {
+                        termuxX11.mkdirs()
+                    }
                 }
             }
         } catch (_: Exception) {}
@@ -1963,17 +1969,33 @@ class LinuxRuntime(private val context: Context) {
         }
 
         val runScript = """
-            # ── Disable AT-SPI accessibility bus ──
+            export DISPLAY=:0
+            export TMPDIR=/data/data/com.termux/files/usr/tmp
+            export XDG_RUNTIME_DIR=/data/data/com.termux/files/usr/tmp
             export NO_AT_BRIDGE=1
             export GTK_A11Y=none
-            export DISPLAY=:0
-            export PULSE_SERVER=127.0.0.1
-            export TMPDIR=/data/data/com.termux/files/usr/tmp
-            export XDG_CURRENT_DESKTOP=XFCE
-            export DESKTOP_SESSION=xfce
 
-            # Native Android audio.
-            pulseaudio -k >/dev/null 2>&1 || true
+            case "$selectedDesktop" in
+                lxqt)
+                    export XDG_CURRENT_DESKTOP=LXQt
+                    export DESKTOP_SESSION=lxqt
+                    ;;
+                mate)
+                    export XDG_CURRENT_DESKTOP=MATE
+                    export DESKTOP_SESSION=mate
+                    ;;
+                kde)
+                    export XDG_CURRENT_DESKTOP=KDE
+                    export DESKTOP_SESSION=plasma
+                    ;;
+                none|minimal|terminal)
+                    ;;
+                *)
+                    export XDG_CURRENT_DESKTOP=XFCE
+                    export DESKTOP_SESSION=xfce
+                    ;;
+            esac
+
             pulseaudio --start --exit-idle-time=-1 >/dev/null 2>&1 || true
 
             echo "DIAG: Launching $selectedDesktop session on DISPLAY=:0 ..."
@@ -1981,6 +2003,8 @@ class LinuxRuntime(private val context: Context) {
                 exec $desktopCommand
             elif [ "$selectedDesktop" = "xfce4" ] && command -v startxfce4 >/dev/null 2>&1; then
                 exec startxfce4
+            elif [ "$selectedDesktop" = "lxqt" ] && command -v startlxqt >/dev/null 2>&1; then
+                exec startlxqt
             elif command -v dbus-launch >/dev/null 2>&1; then
                 exec dbus-launch --exit-with-session $desktopCommand
             else
@@ -2188,6 +2212,15 @@ class LinuxRuntime(private val context: Context) {
             if (lock.exists() && !lock.delete()) {
                 Log.w(TAG, "Could not remove stale package lock: ${lock.absolutePath}")
             }
+        }
+    }
+
+    private fun File.isSymlink(): Boolean {
+        return try {
+            val canon = if (parent == null) this else File(parentFile?.canonicalFile, name)
+            !canon.canonicalFile.equals(canon.absoluteFile)
+        } catch (_: Exception) {
+            false
         }
     }
 }
