@@ -336,13 +336,12 @@ class DesktopActivity : Activity() {
         val keyboardButton = controlButton("Keyboard").apply {
             setOnClickListener { showKeyboard() }
         }
-        inputModeButton = controlButton(inputController?.modeLabel() ?: "Trackpad").apply {
-            setOnClickListener {
-                inputController?.nextMode()
-                val label = inputController?.modeLabel() ?: "Trackpad"
-                this.text = label
-                Toast.makeText(this@DesktopActivity, "Input mode: $label", Toast.LENGTH_SHORT).show()
-            }
+        inputModeButton = controlButton(inputController?.modeLabel() ?: "Trackpad")
+        inputModeButton?.setOnClickListener {
+            inputController?.nextMode()
+            val label = inputController?.modeLabel() ?: "Trackpad"
+            inputModeButton?.text = label
+            Toast.makeText(this@DesktopActivity, "Input mode: $label", Toast.LENGTH_SHORT).show()
         }
         val hideButton = controlButton("−").apply {
             contentDescription = "Hide desktop controls"
