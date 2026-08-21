@@ -234,6 +234,27 @@ object XfceMobileProfile {
           <property name="last-settings-migration-version" type="uint" value="1"/>
           <property name="backdrop" type="empty">
             <property name="screen0" type="empty">
+              <property name="monitorscreen" type="empty">
+                <property name="workspace0" type="empty">
+                  <property name="color-style" type="int" value="0"/>
+                  <property name="image-style" type="int" value="5"/>
+                  <property name="last-image" type="string" value="$wallpaperPath"/>
+                </property>
+              </property>
+              <property name="monitor0" type="empty">
+                <property name="workspace0" type="empty">
+                  <property name="color-style" type="int" value="0"/>
+                  <property name="image-style" type="int" value="5"/>
+                  <property name="last-image" type="string" value="$wallpaperPath"/>
+                </property>
+              </property>
+              <property name="monitordefault" type="empty">
+                <property name="workspace0" type="empty">
+                  <property name="color-style" type="int" value="0"/>
+                  <property name="image-style" type="int" value="5"/>
+                  <property name="last-image" type="string" value="$wallpaperPath"/>
+                </property>
+              </property>
               <property name="monitorbuiltin" type="empty">
                 <property name="workspace0" type="empty">
                   <property name="color-style" type="int" value="0"/>

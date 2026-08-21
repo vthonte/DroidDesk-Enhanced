@@ -1229,7 +1229,9 @@ class LinuxRuntime(private val context: Context) {
             env["GALLIUM_DRIVER"] = "llvmpipe"
         }
 
-        env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=${tmpDir.absolutePath}/dbus-session"
+        env["XDG_SESSION_TYPE"] = "x11"
+        env["XDG_CURRENT_DESKTOP"] = "XFCE"
+        env["DESKTOP_SESSION"] = "xfce"
 
         env["DPKG_ADMINDIR"] = "${prefixDir.absolutePath}/var/lib/dpkg"
         val aptConfig = File(prefixDir, "etc/apt/apt.conf.d/99-droiddesk-paths.conf")
@@ -1934,6 +1936,18 @@ class LinuxRuntime(private val context: Context) {
 
         // X11ServerService owns this socket. Never delete it from the client runtime.
         File(tmpDir, ".X11-unix").mkdirs()
+        try {
+            val termuxTmp = File("/data/data/com.termux/files/usr/tmp").apply { mkdirs() }
+            val termuxX11 = File(termuxTmp, ".X11-unix")
+            val appX11 = File(tmpDir, ".X11-unix")
+            if (!termuxX11.exists()) {
+                try {
+                    Os.symlink(appX11.absolutePath, termuxX11.absolutePath)
+                } catch (_: Exception) {
+                    termuxX11.mkdirs()
+                }
+            }
+        } catch (_: Exception) {}
 
         // Remove stale Xfce ICE listeners left by a killed/restarted activity.
         tmpDir.listFiles { file -> file.name.startsWith(".xfsm-ICE-") }

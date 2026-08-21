@@ -108,7 +108,22 @@ class X11ServerService : Service() {
 
     private fun configureEnvironment() {
         val appTmpDir = File(filesDir, "tmp").apply { mkdirs() }
-        File(appTmpDir, ".X11-unix").mkdirs()
+        val appX11Dir = File(appTmpDir, ".X11-unix").apply { mkdirs() }
+
+        // Also ensure Termux's standard /usr/tmp/.X11-unix links to appTmpDir/.X11-unix
+        try {
+            val termuxTmp = File("/data/data/com.termux/files/usr/tmp").apply { mkdirs() }
+            val termuxX11 = File(termuxTmp, ".X11-unix")
+            if (!termuxX11.exists()) {
+                try {
+                    Os.symlink(appX11Dir.absolutePath, termuxX11.absolutePath)
+                } catch (_: Exception) {
+                    termuxX11.mkdirs()
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not link termux tmp directory: ${e.message}")
+        }
 
         Os.setenv("TMPDIR", appTmpDir.absolutePath, true)
         Os.setenv("XDG_RUNTIME_DIR", appTmpDir.absolutePath, true)
@@ -117,7 +132,12 @@ class X11ServerService : Service() {
 
         val installedXkbRoot = File(filesDir, "usr/share/X11/xkb")
         val rootfsXkbRoot = File(filesDir, "rootfs/usr/share/X11/xkb")
-        val xkbRoot = if (installedXkbRoot.exists()) installedXkbRoot else rootfsXkbRoot
+        val termuxXkbRoot = File("/data/data/com.termux/files/usr/share/X11/xkb")
+        val xkbRoot = when {
+            termuxXkbRoot.exists() -> termuxXkbRoot
+            installedXkbRoot.exists() -> installedXkbRoot
+            else -> rootfsXkbRoot
+        }
         if (xkbRoot.exists()) {
             Os.setenv("XKB_CONFIG_ROOT", xkbRoot.absolutePath, true)
         } else {
