@@ -1,6 +1,8 @@
 package com.orailnoor.droiddesk.view
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
