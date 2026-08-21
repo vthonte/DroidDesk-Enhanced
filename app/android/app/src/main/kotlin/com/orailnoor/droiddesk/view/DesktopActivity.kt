@@ -302,42 +302,46 @@ class DesktopActivity : Activity() {
         }
         val scaleButton = controlButton("${inputController?.scalePercent ?: 100}%").apply {
             contentDescription = "Change display scale"
-            setOnClickListener {
-                val newScale = inputController?.cycleScale() ?: 100
-                text = "${newScale}%"
-                Toast.makeText(this@DesktopActivity, "Display Scale: ${newScale}%", Toast.LENGTH_SHORT).show()
-            }
         }
+        scaleButton.setOnClickListener {
+            val newScale = inputController?.cycleScale() ?: 100
+            scaleButton.text = "${newScale}%"
+            Toast.makeText(this@DesktopActivity, "Display Scale: ${newScale}%", Toast.LENGTH_SHORT).show()
+        }
+
         var orientationMode = 0 // 0: Auto, 1: Landscape, 2: Portrait
         val orientationButton = controlButton("⟳ Auto").apply {
             contentDescription = "Screen orientation lock"
-            setOnClickListener {
-                orientationMode = (orientationMode + 1) % 3
-                when (orientationMode) {
-                    0 -> {
-                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                        text = "⟳ Auto"
-                    }
-                    1 -> {
-                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                        text = "⟳ Land"
-                    }
-                    2 -> {
-                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                        text = "⟳ Port"
-                    }
-                }
-                Toast.makeText(this@DesktopActivity, "Orientation: $text", Toast.LENGTH_SHORT).show()
-            }
         }
+        orientationButton.setOnClickListener {
+            orientationMode = (orientationMode + 1) % 3
+            val label = when (orientationMode) {
+                0 -> {
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                    "⟳ Auto"
+                }
+                1 -> {
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    "⟳ Land"
+                }
+                else -> {
+                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    "⟳ Port"
+                }
+            }
+            orientationButton.text = label
+            Toast.makeText(this@DesktopActivity, "Orientation: $label", Toast.LENGTH_SHORT).show()
+        }
+
         val keyboardButton = controlButton("Keyboard").apply {
             setOnClickListener { showKeyboard() }
         }
         inputModeButton = controlButton(inputController?.modeLabel() ?: "Trackpad").apply {
             setOnClickListener {
                 inputController?.nextMode()
-                text = inputController?.modeLabel() ?: "Trackpad"
-                Toast.makeText(this@DesktopActivity, "Input mode: $text", Toast.LENGTH_SHORT).show()
+                val label = inputController?.modeLabel() ?: "Trackpad"
+                this.text = label
+                Toast.makeText(this@DesktopActivity, "Input mode: $label", Toast.LENGTH_SHORT).show()
             }
         }
         val hideButton = controlButton("−").apply {
