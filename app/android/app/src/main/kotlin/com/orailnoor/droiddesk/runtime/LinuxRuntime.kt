@@ -2021,10 +2021,6 @@ class LinuxRuntime(private val context: Context) {
             "mate" -> "mate-session"
             "kde" -> "startplasma-x11"
             "none", "minimal", "terminal" -> "xfce4-terminal --maximize 2>/dev/null || xterm 2>/dev/null || bash"
-            // The Termux startxfce4 wrapper falls back to Android's /bin/sh
-            // when an X server already exists, which corrupts DISPLAY on
-            // recent Android releases. The session binary starts the same
-            // XFCE components and preserves DroidDesk's prepared environment.
             else -> "xfce4-session"
         }
 
@@ -2033,9 +2029,6 @@ class LinuxRuntime(private val context: Context) {
             export NO_AT_BRIDGE=1
             export GTK_A11Y=none
             export DISPLAY=:0
-
-            # Use the session bus DroidDesk already started
-            export DBUS_SESSION_BUS_ADDRESS="unix:path=${dbusSocket.absolutePath}"
 
             # Native Android audio. AAudio is reliable on modern Android while
             # OpenSL ES remains the compatibility fallback for older devices.
@@ -2058,10 +2051,15 @@ class LinuxRuntime(private val context: Context) {
             else
                 pulseaudio --start --exit-idle-time=-1 >/dev/null 2>&1 || true
             fi
-            echo "DIAG: PulseAudio sinks: ${'$'}(pactl list short sinks 2>/dev/null | cut -f2 | tr '\n' ' ')"
 
-            echo "DIAG: Launching $desktopCommand natively on DISPLAY=:0 ..."
-            exec $desktopCommand
+            echo "DIAG: Launching $selectedDesktop session on DISPLAY=:0 ..."
+            if [ "$selectedDesktop" = "none" ] || [ "$selectedDesktop" = "minimal" ] || [ "$selectedDesktop" = "terminal" ]; then
+                exec $desktopCommand
+            elif command -v dbus-launch >/dev/null 2>&1; then
+                exec dbus-launch --exit-with-session $desktopCommand
+            else
+                exec $desktopCommand
+            fi
         """.trimIndent()
 
         Log.i(TAG, "Starting native Termux session for $selectedDesktop")
