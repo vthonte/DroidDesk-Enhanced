@@ -610,6 +610,15 @@ class DesktopActivity : Activity() {
                     controlOverlay?.visibility = View.VISIBLE
                     controlOverlay?.bringToFront()
                     lorieView?.requestFocus()
+                    lorieView?.post {
+                        lorieView?.triggerCallback()
+                    }
+                    Handler(Looper.getMainLooper()).apply {
+                        postDelayed({ lorieView?.triggerCallback() }, 150)
+                        postDelayed({ lorieView?.triggerCallback() }, 400)
+                        postDelayed({ lorieView?.triggerCallback() }, 800)
+                        postDelayed({ lorieView?.triggerCallback() }, 1500)
+                    }
                 }
                 ?.start()
         }
@@ -641,7 +650,13 @@ class DesktopActivity : Activity() {
         fun switchOption(label: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit) = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
+            setPadding((8 * density).toInt(), (10 * density).toInt(), (8 * density).toInt(), (10 * density).toInt())
+            isClickable = true
+            isFocusable = true
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#1e2638"))
+                cornerRadius = 8 * density
+            }
 
             val textLayout = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -650,20 +665,29 @@ class DesktopActivity : Activity() {
                     text = label
                     setTextColor(Color.WHITE)
                     textSize = 15f
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
                 })
                 addView(TextView(context).apply {
                     text = subtitle
                     setTextColor(Color.parseColor("#90A4AE"))
                     textSize = 12f
+                    setPadding(0, (2 * density).toInt(), 0, 0)
                 })
             }
             addView(textLayout)
 
             val sw = Switch(context).apply {
                 isChecked = checked
-                setOnCheckedChangeListener { _, isChecked -> onChecked(isChecked) }
+                isClickable = false
             }
             addView(sw)
+
+            setOnClickListener {
+                val newState = !sw.isChecked
+                sw.isChecked = newState
+                onChecked(newState)
+                Toast.makeText(context, "$label: ${if (newState) "ON" else "OFF"}", Toast.LENGTH_SHORT).show()
+            }
         }
 
         rootLayout.addView(sectionTitle("🪟 WINDOW & TOUCH CONTROLS"))
@@ -763,6 +787,28 @@ class DesktopActivity : Activity() {
             prefs.save(this)
             inputController?.syncPreferences()
         })
+
+        val switchAppButton = Button(this).apply {
+            text = "⚡ Open in Termux:X11 App"
+            isAllCaps = false
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            backgroundTintList = ColorStateList.valueOf(Color.parseColor("#1565C0"))
+            setOnClickListener {
+                try {
+                    val intent = packageManager.getLaunchIntentForPackage("com.termux.x11")
+                    if (intent != null) {
+                        startActivity(intent)
+                    } else {
+                        Toast.makeText(context, "Termux:X11 app is not installed", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Could not open Termux:X11: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        rootLayout.addView(TextView(this).apply { setPadding(0, (12 * density).toInt(), 0, 0) })
+        rootLayout.addView(switchAppButton)
 
         val scrollView = ScrollView(this).apply {
             addView(rootLayout)

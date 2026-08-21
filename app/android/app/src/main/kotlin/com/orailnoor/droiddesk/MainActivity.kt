@@ -701,6 +701,20 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
 
+                "launchTermuxX11" -> {
+                    try {
+                        val intent = packageManager.getLaunchIntentForPackage("com.termux.x11")
+                        if (intent != null) {
+                            startActivity(intent)
+                            result.success(true)
+                        } else {
+                            result.success(false)
+                        }
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
+                }
+
                 "stopLinux" -> {
                     thread(name = "stop-linux-session") {
                         if (chrootRuntime.hasRoot() || chrootRuntime.isRunning()) {

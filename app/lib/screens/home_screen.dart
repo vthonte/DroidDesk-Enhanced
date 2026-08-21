@@ -155,14 +155,14 @@ class HomeScreen extends StatelessWidget {
                       ],
 
                       // ── Launch Desktop / Reconnect ──
-                      if (state.isRunning)
+                      if (state.isRunning) ...[
                         Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _ActionCard(
                             icon: Icons.fullscreen_rounded,
-                            title: state.selectedDE == 'none' ? 'Return to Terminal' : 'Return to Desktop',
+                            title: state.selectedDE == 'none' ? 'Return to Terminal' : 'Return to Desktop (DroidDesk)',
                             subtitle:
-                                '${state.selectedDE == 'none' ? 'Terminal session' : state.selectedDE.toUpperCase()} is currently running in background',
+                                '${state.selectedDE == 'none' ? 'Terminal session' : state.selectedDE.toUpperCase()} running in embedded display',
                             color: DroidTheme.primary,
                             gradient: DroidTheme.primaryGradient,
                             onTap: () {
@@ -170,6 +170,30 @@ class HomeScreen extends StatelessWidget {
                             },
                           ),
                         ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _ActionCard(
+                            icon: Icons.open_in_new_rounded,
+                            title: 'Open in Termux:X11 App',
+                            subtitle: 'Switch to standalone Termux:X11 companion app',
+                            color: const Color(0xFF1976D2),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF1976D2), Color(0xFF0D47A1)],
+                            ),
+                            onTap: () async {
+                              final opened = await state.launchTermuxX11();
+                              if (!opened && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Termux:X11 companion app is not installed.'),
+                                    backgroundColor: DroidTheme.error,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      ],
 
                       _ActionCard(
                         icon: state.isRunning

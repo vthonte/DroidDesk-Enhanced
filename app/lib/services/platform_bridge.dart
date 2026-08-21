@@ -325,6 +325,11 @@ class DroidDeskPlatform {
     await _channel.invokeMethod('launchDesktopActivity');
   }
 
+  static Future<bool> launchTermuxX11() async {
+    final ok = await _channel.invokeMethod<bool>('launchTermuxX11');
+    return ok ?? false;
+  }
+
   static Future<String> executeCommand(String command) async {
     final result = await _channel.invokeMethod('executeCommand', {
       'command': command,

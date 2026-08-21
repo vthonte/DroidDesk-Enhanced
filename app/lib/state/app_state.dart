@@ -512,6 +512,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Future<bool> launchTermuxX11() async {
+    try {
+      return await DroidDeskPlatform.launchTermuxX11();
+    } catch (e) {
+      _errorMessage = 'Failed to launch Termux:X11: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> stopLinux() async {
     try {
       await DroidDeskPlatform.stopLinux();

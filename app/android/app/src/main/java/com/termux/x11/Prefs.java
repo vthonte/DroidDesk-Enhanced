@@ -50,7 +50,15 @@ public class Prefs {
 
     public void load(Context context) {
         if (context == null) return;
-        SharedPreferences sp = context.getSharedPreferences("x11_preferences", Context.MODE_PRIVATE);
+        SharedPreferences sp = null;
+        try {
+            Context termuxContext = context.createPackageContext("com.termux.x11", Context.CONTEXT_IGNORE_SECURITY);
+            sp = termuxContext.getSharedPreferences("com.termux.x11_preferences", Context.MODE_PRIVATE);
+        } catch (Exception ignored) {}
+        if (sp == null) {
+            sp = context.getSharedPreferences("x11_preferences", Context.MODE_PRIVATE);
+        }
+
         tapToMove.put(sp.getBoolean("tapToMove", true));
         touchMode.put(sp.getString("touchMode", "1"));
         stylusIsMouse.put(sp.getBoolean("stylusIsMouse", false));
@@ -80,5 +88,23 @@ public class Prefs {
             .putBoolean("displayStretch", displayStretch.get())
             .putInt("capturedPointerSpeedFactor", capturedPointerSpeedFactor.get())
             .apply();
+
+        try {
+            Context termuxContext = context.createPackageContext("com.termux.x11", Context.CONTEXT_IGNORE_SECURITY);
+            SharedPreferences txSp = termuxContext.getSharedPreferences("com.termux.x11_preferences", Context.MODE_PRIVATE);
+            txSp.edit()
+                .putBoolean("tapToMove", tapToMove.get())
+                .putString("touchMode", touchMode.get())
+                .putBoolean("stylusIsMouse", stylusIsMouse.get())
+                .putBoolean("showMouseHelper", showMouseHelper.get())
+                .putBoolean("pointerCapture", pointerCapture.get())
+                .putBoolean("keepScreenOn", keepScreenOn.get())
+                .putString("displayResolutionMode", displayResolutionMode.get())
+                .putInt("displayScale", displayScale.get())
+                .putString("displayFilteringMode", displayFilteringMode.get())
+                .putBoolean("displayStretch", displayStretch.get())
+                .putInt("capturedPointerSpeedFactor", capturedPointerSpeedFactor.get())
+                .apply();
+        } catch (Exception ignored) {}
     }
 }
