@@ -105,8 +105,7 @@ class DEPickerScreen extends StatelessWidget {
                 ).animate().fadeIn(delay: 100.ms, duration: 400.ms),
 
                 // ── Device info hint ──
-                if (state.deviceInfo.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                if (state.deviceInfo.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
@@ -132,8 +131,11 @@ class DEPickerScreen extends StatelessWidget {
                             '${state.gpuType}',
                             style: DroidTheme.monoSm,
                             overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
-                ],
 
                 // ── Termux Integration Option Card ──
                 _buildTermuxImportCard(context, state),
