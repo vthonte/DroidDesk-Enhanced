@@ -29,6 +29,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.view.Gravity
 import android.content.res.ColorStateList
+import android.app.AlertDialog
+import android.widget.ScrollView
+import android.widget.Switch
 import com.termux.x11.MainActivity as TermuxMainActivity
 import com.termux.x11.LorieView
 import com.orailnoor.droiddesk.runtime.LinuxRuntime
@@ -112,6 +115,7 @@ class DesktopActivity : Activity() {
         sessionMode = intent.getStringExtra("mode") ?: if (chrootRuntime.hasRoot()) "chroot" else "termux"
         desktopEnv = intent.getStringExtra("de") ?: "xfce4"
         estimatedLoadingSeconds = if (shouldStartSession) 4 else 2
+        TermuxMainActivity.getPrefs().load(this)
 
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -343,6 +347,11 @@ class DesktopActivity : Activity() {
             inputModeButton?.text = label
             Toast.makeText(this@DesktopActivity, "Input mode: $label", Toast.LENGTH_SHORT).show()
         }
+        val settingsButton = controlButton("⚙").apply {
+            contentDescription = "X11 Preferences & Controls"
+            setOnClickListener { showX11PreferencesDialog() }
+            setPadding((10 * density).toInt(), 0, (10 * density).toInt(), 0)
+        }
         val hideButton = controlButton("−").apply {
             contentDescription = "Hide desktop controls"
             setOnClickListener { setControlsCollapsed(true) }
@@ -365,6 +374,9 @@ class DesktopActivity : Activity() {
                 LinearLayout.LayoutParams.WRAP_CONTENT, (42 * density).toInt(),
             ))
             addView(inputModeButton, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, (42 * density).toInt(),
+            ))
+            addView(settingsButton, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, (42 * density).toInt(),
             ))
             addView(hideButton, LinearLayout.LayoutParams(
@@ -606,6 +618,165 @@ class DesktopActivity : Activity() {
     private fun showX11Error(message: String, error: Throwable?) {
         Log.e(TAG, message, error)
         Toast.makeText(this, "X11 Error: $message", Toast.LENGTH_LONG).show()
+    }
+
+    private fun showX11PreferencesDialog() {
+        val density = resources.displayMetrics.density
+        val prefs = TermuxMainActivity.getPrefs()
+
+        val rootLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((20 * density).toInt(), (16 * density).toInt(), (20 * density).toInt(), (16 * density).toInt())
+            setBackgroundColor(Color.parseColor("#151b26"))
+        }
+
+        fun sectionTitle(title: String) = TextView(this).apply {
+            text = title
+            setTextColor(Color.parseColor("#64B5F6"))
+            textSize = 13f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, (14 * density).toInt(), 0, (4 * density).toInt())
+        }
+
+        fun switchOption(label: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, (8 * density).toInt(), 0, (8 * density).toInt())
+
+            val textLayout = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                addView(TextView(context).apply {
+                    text = label
+                    setTextColor(Color.WHITE)
+                    textSize = 15f
+                })
+                addView(TextView(context).apply {
+                    text = subtitle
+                    setTextColor(Color.parseColor("#90A4AE"))
+                    textSize = 12f
+                })
+            }
+            addView(textLayout)
+
+            val sw = Switch(context).apply {
+                isChecked = checked
+                setOnCheckedChangeListener { _, isChecked -> onChecked(isChecked) }
+            }
+            addView(sw)
+        }
+
+        rootLayout.addView(sectionTitle("🪟 WINDOW & TOUCH CONTROLS"))
+
+        rootLayout.addView(switchOption(
+            "Tap to Move Windows",
+            "Instantly drag and move windows by tapping and dragging their titlebar",
+            prefs.tapToMove.get()
+        ) { isChecked ->
+            prefs.tapToMove.put(isChecked)
+            prefs.save(this)
+            inputController?.syncPreferences()
+        })
+
+        rootLayout.addView(switchOption(
+            "Stylus as Mouse",
+            "Treat S-Pen or stylus hover and touch as mouse pointer",
+            prefs.stylusIsMouse.get()
+        ) { isChecked ->
+            prefs.stylusIsMouse.put(isChecked)
+            prefs.save(this)
+            inputController?.syncPreferences()
+        })
+
+        rootLayout.addView(switchOption(
+            "Show Mouse Helper",
+            "Display on-screen mouse buttons overlay for quick clicks",
+            prefs.showMouseHelper.get()
+        ) { isChecked ->
+            prefs.showMouseHelper.put(isChecked)
+            prefs.save(this)
+            inputController?.syncPreferences()
+        })
+
+        rootLayout.addView(sectionTitle("🖥️ DISPLAY & RESOLUTION"))
+
+        rootLayout.addView(switchOption(
+            "100% Native Resolution",
+            "Crisp 1:1 physical pixel rendering (prevents oversized windows)",
+            prefs.displayResolutionMode.get() == "native"
+        ) { isChecked ->
+            if (isChecked) {
+                prefs.displayResolutionMode.put("native")
+                prefs.displayScale.put(100)
+            } else {
+                prefs.displayResolutionMode.put("scaled")
+                prefs.displayScale.put(125)
+            }
+            prefs.save(this)
+            inputController?.syncPreferences()
+            lorieView?.triggerCallback()
+        })
+
+        rootLayout.addView(switchOption(
+            "Crisp Pixel Filtering (Nearest)",
+            "Keep text and icons sharp without blurry bilinear anti-aliasing",
+            prefs.displayFilteringMode.get() == "nearest"
+        ) { isChecked ->
+            prefs.displayFilteringMode.put(if (isChecked) "nearest" else "linear")
+            prefs.save(this)
+            inputController?.syncPreferences()
+        })
+
+        rootLayout.addView(switchOption(
+            "Stretch to Screen",
+            "Fill entire display avoiding black letterbox bars",
+            prefs.displayStretch.get()
+        ) { isChecked ->
+            prefs.displayStretch.put(isChecked)
+            prefs.save(this)
+            inputController?.syncPreferences()
+        })
+
+        rootLayout.addView(sectionTitle("⚡ POWER & CLIPBOARD"))
+
+        rootLayout.addView(switchOption(
+            "Keep Screen Awake (WakeLock)",
+            "Prevent screen from turning off while desktop is active",
+            prefs.keepScreenOn.get()
+        ) { isChecked ->
+            prefs.keepScreenOn.put(isChecked)
+            prefs.save(this)
+            if (isChecked) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+            inputController?.syncPreferences()
+        })
+
+        rootLayout.addView(switchOption(
+            "Clipboard Sync",
+            "Synchronize Android clipboard with Linux X11 clipboard",
+            prefs.clipboardEnable.get()
+        ) { isChecked ->
+            prefs.clipboardEnable.put(isChecked)
+            prefs.save(this)
+            inputController?.syncPreferences()
+        })
+
+        val scrollView = ScrollView(this).apply {
+            addView(rootLayout)
+        }
+
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("⚙️ X11 Preferences & Controls")
+            .setView(scrollView)
+            .setPositiveButton("Done") { dialog, _ ->
+                prefs.save(this)
+                inputController?.syncPreferences()
+                dialog.dismiss()
+            }
+            .show()
     }
 
     override fun onDestroy() {

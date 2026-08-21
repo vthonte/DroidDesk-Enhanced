@@ -1,5 +1,7 @@
 package com.termux.x11;
 
+import android.content.Context;
+import android.content.SharedPreferences;
 import java.util.HashMap;
 
 public class Prefs {
@@ -37,7 +39,7 @@ public class Prefs {
     public Pref<Boolean> hardwareKbdScancodesWorkaround = new Pref<>(false);
     public Pref<Boolean> clipboardEnable = new Pref<>(true);
     
-    public Pref<Boolean> tapToMove = new Pref<>(false);
+    public Pref<Boolean> tapToMove = new Pref<>(true);
     public Pref<Boolean> preferScancodes = new Pref<>(false);
     public Pref<Boolean> scaleTouchpad = new Pref<>(false);
     public Pref<Integer> capturedPointerSpeedFactor = new Pref<>(100);
@@ -45,4 +47,38 @@ public class Prefs {
     public Pref<Boolean> stylusIsMouse = new Pref<>(false);
     
     public HashMap<String, DummyPreference> keys = new HashMap<>();
+
+    public void load(Context context) {
+        if (context == null) return;
+        SharedPreferences sp = context.getSharedPreferences("x11_preferences", Context.MODE_PRIVATE);
+        tapToMove.put(sp.getBoolean("tapToMove", true));
+        touchMode.put(sp.getString("touchMode", "1"));
+        stylusIsMouse.put(sp.getBoolean("stylusIsMouse", false));
+        showMouseHelper.put(sp.getBoolean("showMouseHelper", false));
+        pointerCapture.put(sp.getBoolean("pointerCapture", false));
+        keepScreenOn.put(sp.getBoolean("keepScreenOn", true));
+        displayResolutionMode.put(sp.getString("displayResolutionMode", "native"));
+        displayScale.put(sp.getInt("displayScale", 100));
+        displayFilteringMode.put(sp.getString("displayFilteringMode", "nearest"));
+        displayStretch.put(sp.getBoolean("displayStretch", true));
+        capturedPointerSpeedFactor.put(sp.getInt("capturedPointerSpeedFactor", 100));
+    }
+
+    public void save(Context context) {
+        if (context == null) return;
+        SharedPreferences sp = context.getSharedPreferences("x11_preferences", Context.MODE_PRIVATE);
+        sp.edit()
+            .putBoolean("tapToMove", tapToMove.get())
+            .putString("touchMode", touchMode.get())
+            .putBoolean("stylusIsMouse", stylusIsMouse.get())
+            .putBoolean("showMouseHelper", showMouseHelper.get())
+            .putBoolean("pointerCapture", pointerCapture.get())
+            .putBoolean("keepScreenOn", keepScreenOn.get())
+            .putString("displayResolutionMode", displayResolutionMode.get())
+            .putInt("displayScale", displayScale.get())
+            .putString("displayFilteringMode", displayFilteringMode.get())
+            .putBoolean("displayStretch", displayStretch.get())
+            .putInt("capturedPointerSpeedFactor", capturedPointerSpeedFactor.get())
+            .apply();
+    }
 }

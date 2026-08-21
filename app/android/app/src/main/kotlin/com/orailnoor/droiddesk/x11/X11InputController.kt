@@ -96,6 +96,14 @@ class X11InputController(private val lorieView: LorieView) {
         lorieView.setCallback(null)
     }
 
+    val touchHandler: TouchInputHandler get() = inputHandler
+
+    fun syncPreferences() {
+        val prefs = MainActivity.getPrefs()
+        lorieView.reloadPreferences(prefs)
+        inputHandler.reloadPreferences(prefs)
+    }
+
     private fun setMode(newMode: Int) {
         mode = newMode
         val prefs = MainActivity.getPrefs()
