@@ -2,6 +2,7 @@ package com.orailnoor.droiddesk.runtime
 
 import android.content.Context
 import android.os.Build
+import android.system.Os
 import android.util.Log
 import java.io.File
 import java.io.BufferedReader
@@ -1958,7 +1959,7 @@ class LinuxRuntime(private val context: Context) {
             "mate" -> "mate-session"
             "kde" -> "startplasma-x11"
             "none", "minimal", "terminal" -> "xfce4-terminal --maximize 2>/dev/null || xterm 2>/dev/null || bash"
-            else -> "xfce4-session"
+            else -> "startxfce4"
         }
 
         val runScript = """
@@ -1966,6 +1967,10 @@ class LinuxRuntime(private val context: Context) {
             export NO_AT_BRIDGE=1
             export GTK_A11Y=none
             export DISPLAY=:0
+            export PULSE_SERVER=127.0.0.1
+            export TMPDIR=/data/data/com.termux/files/usr/tmp
+            export XDG_CURRENT_DESKTOP=XFCE
+            export DESKTOP_SESSION=xfce
 
             # Native Android audio.
             pulseaudio -k >/dev/null 2>&1 || true
@@ -1974,6 +1979,8 @@ class LinuxRuntime(private val context: Context) {
             echo "DIAG: Launching $selectedDesktop session on DISPLAY=:0 ..."
             if [ "$selectedDesktop" = "none" ] || [ "$selectedDesktop" = "minimal" ] || [ "$selectedDesktop" = "terminal" ]; then
                 exec $desktopCommand
+            elif [ "$selectedDesktop" = "xfce4" ] && command -v startxfce4 >/dev/null 2>&1; then
+                exec startxfce4
             elif command -v dbus-launch >/dev/null 2>&1; then
                 exec dbus-launch --exit-with-session $desktopCommand
             else
