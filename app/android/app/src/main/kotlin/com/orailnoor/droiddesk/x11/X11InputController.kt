@@ -16,7 +16,7 @@ class X11InputController(private val lorieView: LorieView) {
     )
 
     private val scaleGestureDetector = ScaleGestureDetector(
-        MainActivity.getInstance(),
+        lorieView.context,
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
                 val factor = detector.scaleFactor
