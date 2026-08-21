@@ -83,7 +83,9 @@ class DroidDeskService : Service() {
             try {
                 LinuxRuntime(this).stopSession()
                 ChrootRuntime(this).stopSession()
-            } catch (_: Throwable) {}
+            } catch (e: Throwable) {
+                // Ignore cleanup errors during shutdown
+            }
             releaseWakeLock()
             AndroidAppBridge.stop()
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
