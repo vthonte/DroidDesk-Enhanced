@@ -190,6 +190,18 @@ class LinuxRuntime(private val context: Context) {
         return ""
     }
 
+    fun setSelectedDE(desktopEnv: String): Boolean {
+        return try {
+            val marker = File(prefixDir, DE_MARKER)
+            marker.writeText(normalizedDesktop(desktopEnv))
+            Log.i(TAG, "Active desktop environment set to $desktopEnv")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set active desktop: ${e.message}")
+            false
+        }
+    }
+
     fun getGraphicsMode(): String {
         val freedrenoIcd = File(prefixDir, "share/vulkan/icd.d/freedreno_icd.aarch64.json")
         return if (hasAdrenoGpu() && freedrenoIcd.exists()) {

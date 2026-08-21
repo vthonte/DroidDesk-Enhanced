@@ -153,6 +153,13 @@ class DroidDeskPlatform {
         false;
   }
 
+  static Future<bool> setSelectedDesktopEnvironment(String de) async {
+    return await _channel.invokeMethod<bool>('setSelectedDesktopEnvironment', {
+          'de': de,
+        }) ??
+        false;
+  }
+
   static Future<Map<String, bool>> getOptionalApps() async {
     final result = await _channel.invokeMethod('getOptionalApps');
     return Map<String, bool>.from(result);

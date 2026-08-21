@@ -339,6 +339,12 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "setSelectedDesktopEnvironment" -> {
+                    val desktopEnv = call.argument<String>("de") ?: "xfce4"
+                    val ok = linuxRuntime.setSelectedDE(desktopEnv)
+                    result.success(ok)
+                }
+
                 "installDesktopEnvironment" -> {
                     val desktopEnv = call.argument<String>("de") ?: "xfce4"
                     thread {

@@ -253,6 +253,14 @@ class AppState extends ChangeNotifier {
     return ok;
   }
 
+  Future<bool> setSelectedDesktop(String de) async {
+    _selectedDE = de;
+    final ok = await DroidDeskPlatform.setSelectedDesktopEnvironment(de);
+    await refreshStatus();
+    notifyListeners();
+    return ok;
+  }
+
   Future<bool> importTermuxBackup(String backupPath) async {
     _isImportingTermux = true;
     _termuxImportStatus = 'Importing Termux backup...';

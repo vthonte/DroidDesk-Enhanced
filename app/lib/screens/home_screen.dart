@@ -124,6 +124,16 @@ class HomeScreen extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
                   child: Column(
                     children: [
+                      // ── Switch / Install Desktop Environment ──
+                      _ActionCard(
+                        icon: Icons.dashboard_customize_rounded,
+                        title: 'Desktop: ${state.installedDE.isEmpty || state.installedDE == 'none' ? 'Minimal (Terminal)' : state.installedDE.toUpperCase()}',
+                        subtitle: 'Tap to switch or install desktop environment',
+                        color: DroidTheme.accent,
+                        onTap: () => _showDesktopSwitcher(context, state),
+                      ),
+                      const SizedBox(height: 10),
+
                       // Installation is only actionable when setup is missing.
                       // Do not show an "Installed" card that can reinstall the DE.
                       if (!state.isDEInstalled) ...[
@@ -634,6 +644,129 @@ class HomeScreen extends StatelessWidget {
     if (confirmed == true) {
       await DroidDeskPlatform.unsetDefaultLauncher();
     }
+  }
+
+  void _showDesktopSwitcher(BuildContext context, AppState state) {
+    const options = [
+      (
+        id: 'none',
+        name: 'Terminal / Minimal (No Desktop)',
+        desc: 'Clean X11 canvas with standalone terminal. ~15 MB RAM.',
+        icon: Icons.terminal_rounded,
+        color: Color(0xFF10B981),
+      ),
+      (
+        id: 'xfce4',
+        name: 'XFCE4',
+        desc: 'Fast, lightweight desktop environment with panel and dock.',
+        icon: Icons.grid_view_rounded,
+        color: DroidTheme.secondary,
+      ),
+      (
+        id: 'lxqt',
+        name: 'LXQt',
+        desc: 'Ultra-lightweight Qt desktop environment. Fast & clean.',
+        icon: Icons.widgets_rounded,
+        color: Color(0xFF0A82F1),
+      ),
+      (
+        id: 'mate',
+        name: 'MATE',
+        desc: 'Classic GNOME 2 fork. Comfortable & stable.',
+        icon: Icons.view_comfy_rounded,
+        color: Color(0xFF87A556),
+      ),
+      (
+        id: 'kde',
+        name: 'KDE Plasma',
+        desc: 'Modern, feature-packed desktop (requires more RAM).',
+        icon: Icons.auto_awesome_mosaic_rounded,
+        color: Color(0xFF1D99F3),
+      ),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: DroidTheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(DroidTheme.radiusXl)),
+          border: Border.all(color: DroidTheme.surfaceBorder),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.dashboard_customize_rounded, color: DroidTheme.primary),
+                const SizedBox(width: 10),
+                Text('Desktop Environment', style: DroidTheme.headingSm),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(sheetContext),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Select the active desktop environment or minimal terminal mode.',
+              style: DroidTheme.bodySm,
+            ),
+            const SizedBox(height: 16),
+            ...options.map((opt) {
+              final isCurrent = (state.installedDE == opt.id) ||
+                  (state.installedDE.isEmpty && opt.id == 'none') ||
+                  (state.selectedDE == opt.id);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: isCurrent ? opt.color.withValues(alpha: 0.12) : DroidTheme.surfaceLight,
+                  borderRadius: BorderRadius.circular(DroidTheme.radiusMd),
+                  border: Border.all(
+                    color: isCurrent ? opt.color : DroidTheme.surfaceBorder,
+                    width: isCurrent ? 1.5 : 1,
+                  ),
+                ),
+                child: ListTile(
+                  leading: Icon(opt.icon, color: opt.color),
+                  title: Text(opt.name, style: TextStyle(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal)),
+                  subtitle: Text(opt.desc, style: DroidTheme.bodySm),
+                  trailing: isCurrent ? Icon(Icons.check_circle, color: opt.color) : null,
+                  onTap: () async {
+                    Navigator.pop(sheetContext);
+                    await state.setSelectedDesktop(opt.id);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Active desktop set to ${opt.name}')),
+                      );
+                    }
+                  },
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.download_rounded),
+                label: const Text('Install / Reinstall Packages'),
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const DEInstallScreen()),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showTerminal(BuildContext context, AppState state) {
