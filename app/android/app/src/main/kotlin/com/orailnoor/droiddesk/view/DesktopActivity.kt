@@ -111,7 +111,7 @@ class DesktopActivity : Activity() {
         shouldStartSession = intent.getBooleanExtra("startSession", false)
         sessionMode = intent.getStringExtra("mode") ?: if (chrootRuntime.hasRoot()) "chroot" else "termux"
         desktopEnv = intent.getStringExtra("de") ?: "xfce4"
-        estimatedLoadingSeconds = if (shouldStartSession) 30 else 10
+        estimatedLoadingSeconds = if (shouldStartSession) 4 else 2
 
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

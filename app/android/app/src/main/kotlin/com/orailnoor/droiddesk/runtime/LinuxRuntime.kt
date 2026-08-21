@@ -1909,19 +1909,11 @@ class LinuxRuntime(private val context: Context) {
             return
         }
 
-        patchShebangs()
-        patchElfRunpaths(prefixDir)
-        compileSocketHook()
-        patchEmbeddedXfcePaths()
-
-        val clipboardTool = File(binDir, "xclip")
-        if (!clipboardTool.canExecute()) {
-            Log.i(TAG, "Installing the desktop clipboard compatibility helper")
-            if (installPackageGroup("pkg install -y xclip")) {
-                patchShebangs(force = true)
-            } else {
-                Log.w(TAG, "Clipboard helper unavailable; clipboard sync will retry next session")
-            }
+        if (!isDirectTermuxActive) {
+            patchShebangs()
+            patchElfRunpaths(prefixDir)
+            compileSocketHook()
+            patchEmbeddedXfcePaths()
         }
 
         if (selectedDesktop == "xfce4") {
@@ -1947,75 +1939,6 @@ class LinuxRuntime(private val context: Context) {
         tmpDir.listFiles { file -> file.name.startsWith(".xfsm-ICE-") }
             ?.forEach { it.delete() }
 
-        // Start a session dbus-daemon and keep it as a child process. Do not use
-        // --fork: a forked daemon can outlive the Android activity and leave an
-        // orphaned bus behind after its socket is replaced.
-        val dbusSocket = File(tmpDir, "dbus-session")
-        try {
-            dbusProcess?.destroyForcibly()
-            if (dbusSocket.exists()) dbusSocket.delete()
-            val dbusConfig = File(tmpDir, "dbus-session.conf")
-            dbusConfig.writeText(
-                """
-                <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
-                 "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
-                <busconfig>
-                  <type>session</type>
-                  <keep_umask/>
-                  <listen>unix:path=${dbusSocket.absolutePath}</listen>
-                  <auth>EXTERNAL</auth>
-                  <servicedir>${File(prefixDir, "share/dbus-1/services").absolutePath}</servicedir>
-                  <policy context="default">
-                    <allow send_destination="*" eavesdrop="true"/>
-                    <allow eavesdrop="true"/>
-                    <allow own="*"/>
-                  </policy>
-                </busconfig>
-                """.trimIndent() + "\n",
-            )
-            val dbusCmd = listOf(
-                File(prefixDir, "bin/dbus-daemon").absolutePath,
-                "--config-file=${dbusConfig.absolutePath}",
-                "--nofork",
-                "--nopidfile"
-            )
-            val startedDbus = ProcessBuilder(dbusCmd)
-                .directory(homeDir.apply { mkdirs() })
-                .redirectErrorStream(true)
-                .also { pb ->
-                    pb.environment().clear()
-                    pb.environment().putAll(getTermuxEnv())
-                }
-                .start()
-            dbusProcess = startedDbus
-
-            Thread {
-                try {
-                    startedDbus.inputStream.bufferedReader().forEachLine {
-                        Log.d(TAG, "DBUS: $it")
-                    }
-                } catch (error: java.io.IOException) {
-                    // Closing the pipe is expected when Stop Server terminates dbus.
-                    Log.d(TAG, "D-Bus output stream closed")
-                }
-            }.start()
-
-            val readyDeadline = System.currentTimeMillis() + 2_000
-            while (!dbusSocket.exists() && startedDbus.isAlive &&
-                System.currentTimeMillis() < readyDeadline) {
-                Thread.sleep(20)
-            }
-            check(dbusSocket.exists() && startedDbus.isAlive) {
-                "dbus-daemon did not create its session socket"
-            }
-            Log.i(TAG, "Session dbus-daemon ready")
-        } catch (e: Exception) {
-            Log.e(TAG, "dbus-daemon start failed: ${e.message}")
-            dbusProcess?.destroyForcibly()
-            dbusProcess = null
-            return
-        }
-
         val desktopCommand = when (selectedDesktop) {
             "lxqt" -> "startlxqt"
             "mate" -> "mate-session"
@@ -2030,27 +1953,9 @@ class LinuxRuntime(private val context: Context) {
             export GTK_A11Y=none
             export DISPLAY=:0
 
-            # Native Android audio. AAudio is reliable on modern Android while
-            # OpenSL ES remains the compatibility fallback for older devices.
+            # Native Android audio.
             pulseaudio -k >/dev/null 2>&1 || true
-            if [ "${if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) "1" else "0"}" = "1" ]; then
-                pulseaudio --start --exit-idle-time=-1 \
-                    --load=module-aaudio-sink >/dev/null 2>&1 || true
-                audio_ready=0
-                for attempt in 1 2 3 4 5 6 7 8 9 10; do
-                    if pactl list short sinks 2>/dev/null | grep -q AAudio_sink; then
-                        audio_ready=1
-                        break
-                    fi
-                    sleep 0.1
-                done
-                if [ "${'$'}audio_ready" != "1" ]; then
-                    pulseaudio -k >/dev/null 2>&1 || true
-                    pulseaudio --start --exit-idle-time=-1 >/dev/null 2>&1 || true
-                fi
-            else
-                pulseaudio --start --exit-idle-time=-1 >/dev/null 2>&1 || true
-            fi
+            pulseaudio --start --exit-idle-time=-1 >/dev/null 2>&1 || true
 
             echo "DIAG: Launching $selectedDesktop session on DISPLAY=:0 ..."
             if [ "$selectedDesktop" = "none" ] || [ "$selectedDesktop" = "minimal" ] || [ "$selectedDesktop" = "terminal" ]; then
@@ -2086,7 +1991,6 @@ class LinuxRuntime(private val context: Context) {
                     Log.d(TAG, "DESKTOP: " + String(buffer, 0, charsRead))
                 }
             } catch (error: java.io.IOException) {
-                // destroyForcibly() closes the pipe during a normal shutdown.
                 Log.d(TAG, "Desktop output stream closed")
             }
         }.start()
@@ -2095,23 +1999,23 @@ class LinuxRuntime(private val context: Context) {
     }
 
     /** Wait until the desktop shell processes that paint the first frame exist. */
-    fun waitForDesktopReady(desktopEnv: String = "xfce4", timeoutMs: Long = 45_000): Boolean {
+    fun waitForDesktopReady(desktopEnv: String = "xfce4", timeoutMs: Long = 10_000): Boolean {
         val norm = normalizedDesktop(desktopEnv)
         if (norm in listOf("none", "minimal", "terminal")) {
-            Thread.sleep(800)
+            Thread.sleep(250)
             return sessionProcess?.isAlive == true
         }
 
         val processes = when (norm) {
-            "lxqt" -> listOf("lxqt-session", "lxqt-panel")
-            "mate" -> listOf("mate-session", "mate-panel")
-            "kde" -> listOf("plasmashell")
-            else -> listOf("xfdesktop", "xfce4-panel")
+            "lxqt" -> listOf("lxqt-session", "lxqt-panel", "pcmanfm-qt", "startlxqt")
+            "mate" -> listOf("mate-session", "mate-panel", "marco")
+            "kde" -> listOf("plasmashell", "kwin_x11")
+            else -> listOf("xfce4-session", "xfwm4", "xfdesktop", "xfce4-panel")
         }
 
         val deadline = System.currentTimeMillis() + timeoutMs
+        val check = processes.joinToString(" || ") { "pgrep -x '$it' >/dev/null" }
         while (System.currentTimeMillis() < deadline) {
-            val check = processes.joinToString(" && ") { "pgrep -x '$it' >/dev/null" }
             val ready = runCatching {
                 ProcessBuilder(File(binDir, "bash").absolutePath, "-c", check)
                     .directory(homeDir)
@@ -2124,13 +2028,11 @@ class LinuxRuntime(private val context: Context) {
                     .waitFor() == 0
             }.getOrDefault(false)
             if (ready) {
-                Thread.sleep(650)
                 return true
             }
-            Thread.sleep(150)
+            Thread.sleep(100)
         }
-        Log.w(TAG, "Timed out waiting for $desktopEnv to paint its first desktop frame")
-        return false
+        return sessionProcess?.isAlive == true
     }
 
     fun stopSession() {
