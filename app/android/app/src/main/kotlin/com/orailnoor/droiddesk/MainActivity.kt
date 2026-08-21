@@ -217,8 +217,39 @@ class MainActivity : FlutterActivity() {
                             linuxRuntime.getInstalledDE()
                         },
                         "rootfsPath" to if (rooted) chrootRuntime.getRootfsPath() else "",
-                        "rootfsSizeMB" to if (rooted) chrootRuntime.getRootfsSizeMB() else 0L
+                        "rootfsSizeMB" to if (rooted) chrootRuntime.getRootfsSizeMB() else 0L,
+                        "isDirectTermux" to linuxRuntime.useDirectTermux,
+                        "isDirectTermuxAccessible" to linuxRuntime.isDirectTermuxAccessible
                     ))
+                }
+
+                // ── Termux Direct & Import Integration ──
+                "isDirectTermuxAvailable" -> {
+                    result.success(linuxRuntime.isDirectTermuxAccessible)
+                }
+
+                "useDirectTermuxPrefix" -> {
+                    val enable = call.argument<Boolean>("enable") ?: true
+                    linuxRuntime.useDirectTermux = enable
+                    result.success(true)
+                }
+
+                "importTermuxBackup" -> {
+                    val filePath = call.argument<String>("filePath") ?: ""
+                    thread(name = "import-termux-backup") {
+                        val file = java.io.File(filePath)
+                        val ok = linuxRuntime.importTermuxBackup(file) { progress, status ->
+                            runOnUiThread {
+                                flutterEngine.dartExecutor.binaryMessenger.let { messenger ->
+                                    MethodChannel(messenger, CHANNEL).invokeMethod(
+                                        "onInstallProgress",
+                                        mapOf("progress" to progress, "status" to status)
+                                    )
+                                }
+                            }
+                        }
+                        runOnUiThread { result.success(ok) }
+                    }
                 }
 
                 // ── Device Info ──

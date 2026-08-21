@@ -97,16 +97,35 @@ class LinuxRuntime(private val context: Context) {
         return wasRunning
     }
 
-    // ── Base directories (all inside app's private storage) ──
+    // ── Base directories & Direct Termux Import Integration ──
+
+    val isDirectTermuxAccessible: Boolean
+        get() {
+            val directBash = File("/data/data/com.termux/files/usr/bin/bash")
+            return directBash.exists() && directBash.canExecute()
+        }
+
+    var useDirectTermux: Boolean
+        get() = context.getSharedPreferences("droiddesk_prefs", Context.MODE_PRIVATE)
+            .getBoolean("use_direct_termux", isDirectTermuxAccessible)
+        set(value) {
+            context.getSharedPreferences("droiddesk_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("use_direct_termux", value).apply()
+        }
+
+    private val termuxDirectPrefix = File("/data/data/com.termux/files/usr")
+    private val termuxDirectHome = File("/data/data/com.termux/files/home")
 
     private val baseDir: File get() = context.filesDir
-    private val prefixDir: File get() = File(baseDir, "usr")
+    private val prefixDir: File
+        get() = if (useDirectTermux && isDirectTermuxAccessible) termuxDirectPrefix else File(baseDir, "usr")
     private val binDir: File get() = File(prefixDir, "bin")
     private val libDir: File get() = File(prefixDir, "lib")
     // Shared with X11ServerService. X clients resolve /tmp/.X11-unix/X0 here
     // through libsocket_hook, so this must not be $PREFIX/tmp.
     private val tmpDir: File get() = File(baseDir, "tmp")
-    private val homeDir: File get() = File(baseDir, "home")
+    private val homeDir: File
+        get() = if (useDirectTermux && isDirectTermuxAccessible) termuxDirectHome else File(baseDir, "home")
 
     /** Qualcomm exposes the Adreno render device through KGSL on Android. */
     private fun hasAdrenoGpu(): Boolean = File("/dev/kgsl-3d0").exists()
@@ -119,7 +138,8 @@ class LinuxRuntime(private val context: Context) {
     // ── Status ──
 
     fun isBootstrapped(): Boolean {
-        return File(baseDir, BOOTSTRAP_MARKER).exists() && File(prefixDir, "bin/bash").exists()
+        return (useDirectTermux && isDirectTermuxAccessible) ||
+            (File(baseDir, BOOTSTRAP_MARKER).exists() && File(prefixDir, "bin/bash").exists())
     }
 
     fun isRunning(): Boolean {
@@ -257,6 +277,63 @@ class LinuxRuntime(private val context: Context) {
         Log.i(TAG, "Setting up bootstrap environment...")
         listOf(prefixDir, binDir, libDir, tmpDir, homeDir).forEach { it.mkdirs() }
         Log.i(TAG, "Bootstrap directories ready. Base: ${baseDir.absolutePath}")
+    }
+
+    fun importTermuxBackup(backupFile: File, onProgress: (Double, String) -> Unit = { _, _ -> }): Boolean {
+        if (!backupFile.exists() || !backupFile.isFile) {
+            onProgress(-1.0, "Backup file not found: ${backupFile.absolutePath}")
+            return false
+        }
+
+        return try {
+            onProgress(0.05, "Preparing target directories...")
+            val targetPrefix = File(baseDir, "usr")
+            val targetHome = File(baseDir, "home")
+            listOf(targetPrefix, targetHome, tmpDir).forEach { it.mkdirs() }
+
+            onProgress(0.15, "Extracting Termux backup tarball...")
+            val tarPath = backupFile.absolutePath
+            val isGz = tarPath.endsWith(".gz") || tarPath.endsWith(".tgz")
+            val tarFlags = if (isGz) "-xzf" else "-xf"
+
+            val pb = ProcessBuilder("tar", tarFlags, tarPath, "-C", baseDir.absolutePath)
+                .redirectErrorStream(true)
+            val process = pb.start()
+            val log = process.inputStream.bufferedReader().readText()
+            val exitCode = process.waitFor()
+
+            if (exitCode != 0) {
+                Log.e(TAG, "Tar extraction failed (code $exitCode): $log")
+                onProgress(-1.0, "Extraction failed: exit code $exitCode")
+                return false
+            }
+
+            onProgress(0.60, "Configuring imported environment...")
+            createAptConfigOverride()
+            ensureAptDirectories()
+            setExecutableRecursively(File(targetPrefix, "bin"))
+            setExecutableRecursively(File(targetPrefix, "libexec"))
+
+            onProgress(0.75, "Relocating script shebangs to DroidDesk prefix...")
+            patchShebangs(force = true)
+
+            onProgress(0.85, "Patching ELF runpaths...")
+            patchElfRunpaths(targetPrefix)
+
+            onProgress(0.95, "Finalizing socket hook...")
+            ensureSocketHookPrebuilt()
+
+            val marker = File(baseDir, BOOTSTRAP_MARKER)
+            marker.writeText("Imported from Termux backup: ${backupFile.name}\n")
+
+            onProgress(1.0, "Successfully imported Termux environment!")
+            Log.i(TAG, "Successfully imported Termux environment from ${backupFile.name}")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to import Termux backup", e)
+            onProgress(-1.0, "Import error: ${e.message}")
+            false
+        }
     }
 
     fun extractBootstrapIfNeeded(context: Context) {

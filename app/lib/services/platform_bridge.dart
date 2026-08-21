@@ -88,10 +88,29 @@ class DroidDeskPlatform {
     return Map<String, dynamic>.from(result);
   }
 
-  // ── Bootstrap ──
+  // ── Bootstrap & Termux Integration ──
 
   static Future<void> setupBootstrap() async {
     await _channel.invokeMethod('setupBootstrap');
+  }
+
+  static Future<bool> isDirectTermuxAvailable() async {
+    final result = await _channel.invokeMethod<bool>('isDirectTermuxAvailable');
+    return result ?? false;
+  }
+
+  static Future<bool> useDirectTermuxPrefix({bool enable = true}) async {
+    final result = await _channel.invokeMethod<bool>('useDirectTermuxPrefix', {
+      'enable': enable,
+    });
+    return result ?? false;
+  }
+
+  static Future<bool> importTermuxBackup(String filePath) async {
+    final result = await _channel.invokeMethod<bool>('importTermuxBackup', {
+      'filePath': filePath,
+    });
+    return result ?? false;
   }
 
   // ── Native Desktop Environment Installation (non-root fallback) ──

@@ -137,9 +137,10 @@ class DEPickerScreen extends StatelessWidget {
                       ],
                     ),
                   ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
-                ],
+                // ── Termux Integration Option Card ──
+                _buildTermuxImportCard(context, state),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
                 // ── DE Cards ──
                 Expanded(
@@ -328,6 +329,186 @@ class DEPickerScreen extends StatelessWidget {
           ),
         );
       }),
+    );
+  }
+
+  Widget _buildTermuxImportCard(BuildContext context, AppState state) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: DroidTheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(DroidTheme.radiusMd),
+        border: Border.all(
+          color: DroidTheme.primary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.terminal_rounded, color: DroidTheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Termux Import & Direct Link',
+                style: DroidTheme.headingSm.copyWith(fontSize: 14, color: DroidTheme.primary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            state.isDirectTermuxAvailable
+                ? 'Existing Termux installation detected at /data/data/com.termux/files.'
+                : 'Reuse your existing Termux tools, Python packages, and dotfiles to save space.',
+            style: DroidTheme.bodySm,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (state.isDirectTermuxAvailable)
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: state.isDirectTermux ? Colors.green : DroidTheme.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ),
+                    icon: Icon(
+                      state.isDirectTermux ? Icons.check_circle : Icons.link,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                    label: Text(
+                      state.isDirectTermux ? 'Directly Linked (0 MB)' : 'Link Direct (0 MB)',
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                    onPressed: () => state.useDirectTermuxPrefix(enable: !state.isDirectTermux),
+                  ),
+                ),
+              if (state.isDirectTermuxAvailable) const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  icon: const Icon(Icons.unarchive_rounded, size: 16),
+                  label: const Text(
+                    'Import Backup Tarball',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  onPressed: () => _showTermuxImportDialog(context, state),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ).animate().fadeIn(delay: 250.ms, duration: 400.ms);
+  }
+
+  void _showTermuxImportDialog(BuildContext context, AppState state) {
+    final controller = TextEditingController(text: '/sdcard/Download/termux-backup.tar.gz');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.unarchive_rounded, color: DroidTheme.primary),
+            SizedBox(width: 8),
+            Text('Import Termux Backup'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the file path of your exported Termux backup archive (created via export-termux-for-droiddesk.sh):',
+              style: DroidTheme.bodySm,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Backup Archive Path',
+                hintText: '/sdcard/Download/termux-backup.tar.gz',
+                prefixIcon: Icon(Icons.folder_zip_rounded),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: DroidTheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: DroidTheme.primary.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 16, color: DroidTheme.primary),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This is a COPY operation. Your original Termux app and files will remain safe and intact.',
+                      style: DroidTheme.monoSm,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.file_download_rounded, size: 18),
+            label: const Text('Start Import'),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final path = controller.text.trim();
+              if (path.isEmpty) return;
+
+              final success = await state.importTermuxBackup(path);
+              if (context.mounted) {
+                if (success) {
+                  showDialog(
+                    context: context,
+                    builder: (alertCtx) => AlertDialog(
+                      title: const Row(
+                        children: [
+                          Icon(Icons.check_circle_rounded, color: Colors.green),
+                          SizedBox(width: 8),
+                          Text('Import Successful!'),
+                        ],
+                      ),
+                      content: const Text(
+                        'Your Termux environment has been copied into DroidDesk.\n\n'
+                        'ℹ️ Note: Original Termux files were NOT deleted.\n\n'
+                        '💡 Recommendation: You can launch and test your desktop installation now. '
+                        'Once you verify everything works as expected, you may safely uninstall or clear data from the original Termux app to reclaim storage space.',
+                        style: DroidTheme.bodyMd,
+                      ),
+                      actions: [
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(alertCtx),
+                          child: const Text('Got it!'),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to import backup. Please check file path.')),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 }

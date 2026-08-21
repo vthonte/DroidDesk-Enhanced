@@ -47,12 +47,22 @@ class AppState extends ChangeNotifier {
   // ── Error State ──
   String? _errorMessage;
 
+  // ── Termux Integration State ──
+  bool _isDirectTermuxAvailable = false;
+  bool _isDirectTermux = false;
+  bool _isImportingTermux = false;
+  String _termuxImportStatus = '';
+
   // ── Getters ──
   ThemeMode get themeMode => _themeMode;
   bool get isDarkMode => DroidTheme.isDark;
   bool get isBootstrapped => _isBootstrapped;
   bool get isRunning => _isRunning;
   bool get hasRoot => _hasRoot;
+  bool get isDirectTermuxAvailable => _isDirectTermuxAvailable;
+  bool get isDirectTermux => _isDirectTermux;
+  bool get isImportingTermux => _isImportingTermux;
+  String get termuxImportStatus => _termuxImportStatus;
   String get installedDistro => _installedDistro;
   String get installedDE => _installedDE;
   String get selectedDistro => _selectedDistro;
@@ -223,6 +233,8 @@ class AppState extends ChangeNotifier {
       _hasRoot = status['hasRoot'] == true;
       _installedDistro = status['distro']?.toString() ?? '';
       _installedDE = status['installedDE']?.toString() ?? '';
+      _isDirectTermux = status['isDirectTermux'] == true;
+      _isDirectTermuxAvailable = status['isDirectTermuxAccessible'] == true;
 
       if (_installedDE.isNotEmpty) {
         await refreshOptionalApps();
@@ -231,6 +243,26 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to get runtime status: $e';
+      notifyListeners();
+    }
+  }
+
+  Future<bool> useDirectTermuxPrefix({bool enable = true}) async {
+    final ok = await DroidDeskPlatform.useDirectTermuxPrefix(enable: enable);
+    await refreshStatus();
+    return ok;
+  }
+
+  Future<bool> importTermuxBackup(String backupPath) async {
+    _isImportingTermux = true;
+    _termuxImportStatus = 'Importing Termux backup...';
+    notifyListeners();
+    try {
+      final ok = await DroidDeskPlatform.importTermuxBackup(backupPath);
+      await refreshStatus();
+      return ok;
+    } finally {
+      _isImportingTermux = false;
       notifyListeners();
     }
   }
