@@ -1,10 +1,4 @@
-<!-- 
-    Shared User ID with Termux allows DroidDesk to directly share and execute 
-    the existing Termux environment at /data/data/com.termux/files without 
-    duplicating storage space when signed with the same key.
--->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    android:sharedUserId="com.termux">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Network: download rootfs, apt packages -->
     <uses-permission android:name="android.permission.INTERNET" />
