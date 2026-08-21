@@ -421,6 +421,7 @@ class AppState extends ChangeNotifier {
       _extractProgress = 0.0;
       _statusMessage = 'Installing Desktop Environment...';
       _errorMessage = null;
+      _terminalOutput.clear();
       notifyListeners();
 
       if (_hasRoot) {

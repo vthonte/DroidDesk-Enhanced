@@ -353,40 +353,64 @@ class MainActivity : FlutterActivity() {
                 "installDesktopEnvironment" -> {
                     val desktopEnv = call.argument<String>("de") ?: "xfce4"
                     thread {
-                        try {
-                            val latch = java.util.concurrent.CountDownLatch(1)
-                            var success = false
-                            chrootRuntime.installDesktopEnvironment(
-                                desktopEnv,
-                                { progress, status ->
-                                    runOnUiThread {
-                                        flutterEngine.dartExecutor.binaryMessenger.let { messenger ->
-                                            MethodChannel(messenger, CHANNEL).invokeMethod(
-                                                "onInstallProgress",
-                                                mapOf("progress" to progress, "status" to status)
-                                            )
+                        if (chrootRuntime.hasRoot()) {
+                            try {
+                                val latch = java.util.concurrent.CountDownLatch(1)
+                                var success = false
+                                chrootRuntime.installDesktopEnvironment(
+                                    desktopEnv,
+                                    { progress, status ->
+                                        runOnUiThread {
+                                            flutterEngine.dartExecutor.binaryMessenger.let { messenger ->
+                                                MethodChannel(messenger, CHANNEL).invokeMethod(
+                                                    "onInstallProgress",
+                                                    mapOf("progress" to progress, "status" to status)
+                                                )
+                                            }
+                                        }
+                                        if (progress >= 1.0 || progress < 0) {
+                                            success = progress >= 1.0
+                                            latch.countDown()
+                                        }
+                                    },
+                                    { logChunk ->
+                                        runOnUiThread {
+                                            flutterEngine.dartExecutor.binaryMessenger.let { messenger ->
+                                                MethodChannel(messenger, CHANNEL).invokeMethod(
+                                                    "onTerminalOutput",
+                                                    mapOf("text" to logChunk)
+                                                )
+                                            }
                                         }
                                     }
-                                    if (progress >= 1.0 || progress < 0) {
-                                        success = progress >= 1.0
-                                        latch.countDown()
-                                    }
-                                },
-                                { logChunk ->
+                                )
+                                latch.await()
+                                runOnUiThread { result.success(success) }
+                            } catch (e: Exception) {
+                                runOnUiThread { result.success(false) }
+                            }
+                        } else {
+                            linuxRuntime.setInstallLogSink { chunk ->
+                                runOnUiThread {
+                                    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+                                        .invokeMethod("onTerminalOutput", mapOf("text" to chunk))
+                                }
+                            }
+                            try {
+                                val ok = linuxRuntime.installDesktopEnvironmentNative(
+                                    desktopEnv,
+                                ) { progress, status ->
                                     runOnUiThread {
-                                        flutterEngine.dartExecutor.binaryMessenger.let { messenger ->
-                                            MethodChannel(messenger, CHANNEL).invokeMethod(
-                                                "onTerminalOutput",
-                                                mapOf("text" to logChunk)
-                                            )
-                                        }
+                                        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).invokeMethod(
+                                            "onInstallProgress",
+                                            mapOf("progress" to progress, "status" to status),
+                                        )
                                     }
                                 }
-                            )
-                            latch.await()
-                            runOnUiThread { result.success(success) }
-                        } catch (e: Exception) {
-                            runOnUiThread { result.success(false) }
+                                runOnUiThread { result.success(ok) }
+                            } finally {
+                                linuxRuntime.setInstallLogSink(null)
+                            }
                         }
                     }
                 }

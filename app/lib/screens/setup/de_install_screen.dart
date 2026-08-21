@@ -59,7 +59,12 @@ class _DEInstallScreenState extends State<DEInstallScreen> {
       }
     });
 
-    final isDone = state.isDEInstalled;
+    final isDone = !_started
+        ? false
+        : (!state.isExtracting &&
+            (state.extractProgress >= 1.0 ||
+                state.extractStatus.toLowerCase().contains('complete') ||
+                state.extractStatus.toLowerCase().contains('ready')));
     final hasError = state.errorMessage != null;
 
     return Scaffold(

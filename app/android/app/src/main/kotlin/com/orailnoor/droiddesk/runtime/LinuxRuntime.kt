@@ -1503,6 +1503,18 @@ class LinuxRuntime(private val context: Context) {
         return isMinimalDebianInstalled()
     }
 
+    fun isDesktopActuallyInstalled(de: String): Boolean {
+        val norm = normalizedDesktop(de)
+        return when (norm) {
+            "none", "minimal", "terminal" -> File(binDir, "xfce4-terminal").exists() || File(binDir, "bash").exists()
+            "xfce4" -> File(binDir, "xfce4-session").exists()
+            "lxqt" -> File(binDir, "startlxqt").exists()
+            "mate" -> File(binDir, "mate-session").exists()
+            "kde" -> File(binDir, "startplasma-x11").exists() || File(binDir, "plasmashell").exists()
+            else -> false
+        }
+    }
+
     fun installDesktopEnvironmentNative(
         desktopEnv: String = "xfce4",
         onProgress: ((Double, String) -> Unit)? = null,
@@ -1510,7 +1522,7 @@ class LinuxRuntime(private val context: Context) {
         val selectedDesktop = normalizedDesktop(desktopEnv)
         val marker = File(prefixDir, DE_MARKER)
 
-        if (getInstalledDE() == selectedDesktop) {
+        if (getInstalledDE() == selectedDesktop && isDesktopActuallyInstalled(selectedDesktop)) {
             onProgress?.invoke(1.0, "$selectedDesktop is already installed")
             Log.i(TAG, "$selectedDesktop desktop environment already installed")
             return true
@@ -1521,47 +1533,36 @@ class LinuxRuntime(private val context: Context) {
             return false
         }
 
-        patchShebangs()
-        patchElfRunpaths(prefixDir)
-        compileSocketHook()
-        onProgress?.invoke(0.12, "Configuring X11 and TUR repositories...")
+        if (!isDirectTermuxActive) {
+            patchShebangs()
+            patchElfRunpaths(prefixDir)
+            compileSocketHook()
+            onProgress?.invoke(0.12, "Configuring X11 and TUR repositories...")
 
-        // Install the x11/tur repository packages. Their postinst scripts run
-        // `apt update`, which triggers SIGSYS under the app's seccomp filter, so we
-        // unpack the .debs, neutralise the postinst scripts, configure them, and
-        // then update the package lists ourselves.
-        if (!installRepoPackages()) {
-            Log.e(TAG, "Failed to install x11-repo/tur-repo")
-            return false
+            if (!installRepoPackages()) {
+                Log.e(TAG, "Failed to install x11-repo/tur-repo")
+                return false
+            }
         }
+
         onProgress?.invoke(0.24, "Updating native package database...")
 
-        // Finish configuring anything left over from a previous run, then install
-        // the desktop, GPU drivers, and build tools. Each install is followed by a
-        // shebang patch + configure pass so postinst scripts find our prefix.
-        if (!installPackageGroup("dpkg --configure -a")) {
-            Log.e(TAG, "Initial dpkg --configure -a failed")
-            return false
+        if (!isDirectTermuxActive) {
+            installPackageGroup("dpkg --configure -a")
+            installPackageGroup("pkg update -y")
         }
-        if (!installPackageGroup("pkg update -y")) {
-            Log.e(TAG, "pkg update failed")
-            return false
-        }
+
         onProgress?.invoke(0.34, "Installing X11 and audio packages...")
-        // DroidDesk embeds the X server, so termux-x11-nightly is deliberately
-        // not installed. All desktops connect to the service's DISPLAY=:0.
-        if (!installPackageGroup("pkg install -y xorg-xrandr pulseaudio xclip")) {
-            Log.e(TAG, "Native X11 runtime package install failed")
-            return false
-        }
+        val x11Tools = "xorg-xrandr pulseaudio xclip"
+        installPackageGroup("DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y $x11Tools")
 
         if (selectedDesktop in listOf("none", "minimal", "terminal")) {
             onProgress?.invoke(0.46, "Setting up terminal environment...")
-            installPackageGroup("pkg install -y xfce4-terminal")
+            installPackageGroup("DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y xfce4-terminal")
             val nativeTools = "git wget curl openssh htop python clang"
             onProgress?.invoke(0.80, "Installing Desktop Essentials tools...")
-            installPackageGroup("pkg install -y $nativeTools")
-            compileSocketHook()
+            installPackageGroup("DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y $nativeTools")
+            if (!isDirectTermuxActive) compileSocketHook()
             marker.writeText(selectedDesktop)
             onProgress?.invoke(1.0, "Terminal / Minimal environment ready")
             Log.i(TAG, "Terminal / Minimal environment setup complete")
@@ -1576,28 +1577,17 @@ class LinuxRuntime(private val context: Context) {
             "kde" -> "plasma-desktop konsole dolphin"
             else -> "xfce4 xfce4-terminal xfce4-whiskermenu-plugin xfce4-notifyd thunar mousepad"
         }
-        if (!installPackageGroup("pkg install -y $desktopPackages")) {
+        if (!installPackageGroup("DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y $desktopPackages")) {
             Log.e(TAG, "$selectedDesktop package install failed")
             return false
         }
         onProgress?.invoke(0.70, "Installing Mesa graphics packages...")
 
-        // mesa-zink pulls the Vulkan loader selected by the active Termux repo.
-        // Current repositories use vulkan-loader-generic, which provides and
-        // conflicts with the older vulkan-loader-android package name.
-        if (!installPackageGroup("pkg install -y mesa-zink")) {
-            // Graphics acceleration is optional. A desktop with llvmpipe is much
-            // better UX than failing setup because a vendor Vulkan stack is not
-            // compatible with the current Mesa package set.
-            Log.w(TAG, "Mesa/Zink install unavailable; continuing with software rendering")
-            installPackageGroup("dpkg --configure -a")
-        }
+        installPackageGroup("DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y mesa-zink")
 
-        // Turnip/Freedreno is the hardware path for Qualcomm Adreno. Do not
-        // install or force that ICD on Mali/PowerVR devices.
         if (hasAdrenoGpu()) {
             onProgress?.invoke(0.78, "Installing Adreno hardware acceleration...")
-            installPackageGroup("pkg install -y mesa-vulkan-icd-freedreno")
+            installPackageGroup("DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y mesa-vulkan-icd-freedreno")
         }
 
         val nativeTools = "git wget curl openssh htop python clang"
@@ -1605,15 +1595,13 @@ class LinuxRuntime(private val context: Context) {
             0.84,
             "Installing Desktop Essentials tools...",
         )
-        if (!installPackageGroup("pkg install -y $nativeTools")) {
-            Log.e(TAG, "Native Termux utility package install failed")
-            return false
-        }
+        installPackageGroup("DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y $nativeTools")
         onProgress?.invoke(0.94, "Finalizing native Linux environment...")
 
-        // Rebuild the hook with the installed clang, then persist the selected DE.
-        compileSocketHook()
-        patchEmbeddedXfcePaths()
+        if (!isDirectTermuxActive) {
+            compileSocketHook()
+            patchEmbeddedXfcePaths()
+        }
         marker.writeText(selectedDesktop)
         onProgress?.invoke(1.0, "Native Linux setup complete")
         Log.i(TAG, "Native Termux $selectedDesktop installation complete")
