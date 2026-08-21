@@ -160,9 +160,9 @@ class HomeScreen extends StatelessWidget {
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _ActionCard(
                             icon: Icons.fullscreen_rounded,
-                            title: 'Return to Desktop',
+                            title: state.selectedDE == 'none' ? 'Return to Terminal' : 'Return to Desktop',
                             subtitle:
-                                '${state.selectedDE.toUpperCase()} is currently running in background',
+                                '${state.selectedDE == 'none' ? 'Terminal session' : state.selectedDE.toUpperCase()} is currently running in background',
                             color: DroidTheme.primary,
                             gradient: DroidTheme.primaryGradient,
                             onTap: () {
@@ -174,13 +174,19 @@ class HomeScreen extends StatelessWidget {
                       _ActionCard(
                         icon: state.isRunning
                             ? Icons.stop_circle_rounded
-                            : Icons.desktop_mac_rounded,
+                            : (state.selectedDE == 'none'
+                                ? Icons.terminal_rounded
+                                : Icons.desktop_mac_rounded),
                         title: state.isRunning
                             ? 'Stop Server'
-                            : 'Launch Desktop',
+                            : (state.selectedDE == 'none'
+                                ? 'Launch Terminal Canvas'
+                                : 'Launch Desktop'),
                         subtitle: state.isRunning
                             ? 'Shutdown Linux environment'
-                            : 'Start ${state.selectedDE.toUpperCase()} desktop environment',
+                            : (state.selectedDE == 'none'
+                                ? 'Start clean X11 terminal session without desktop'
+                                : 'Start ${state.selectedDE.toUpperCase()} desktop environment'),
                         color: state.isRunning
                             ? DroidTheme.error
                             : DroidTheme.primary,
@@ -722,6 +728,8 @@ class HomeScreen extends StatelessWidget {
               final isCurrent = (state.installedDE == opt.id) ||
                   (state.installedDE.isEmpty && opt.id == 'none') ||
                   (state.selectedDE == opt.id);
+              final isInstalled = state.isDesktopInstalled(opt.id) || opt.id == 'none';
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 decoration: BoxDecoration(
@@ -733,17 +741,74 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 child: ListTile(
-                  leading: Icon(opt.icon, color: opt.color),
-                  title: Text(opt.name, style: TextStyle(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal)),
+                  leading: Icon(opt.icon, color: isInstalled ? opt.color : DroidTheme.textMuted),
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          opt.name,
+                          style: TextStyle(
+                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isInstalled
+                              ? Colors.green.withValues(alpha: 0.15)
+                              : Colors.orange.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          isInstalled ? 'Installed' : 'Not Installed',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isInstalled ? Colors.green : Colors.orange,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   subtitle: Text(opt.desc, style: DroidTheme.bodySm),
                   trailing: isCurrent ? Icon(Icons.check_circle, color: opt.color) : null,
                   onTap: () async {
-                    Navigator.pop(sheetContext);
-                    await state.setSelectedDesktop(opt.id);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Active desktop set to ${opt.name}')),
+                    if (isInstalled) {
+                      Navigator.pop(sheetContext);
+                      await state.setSelectedDesktop(opt.id);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Active desktop set to ${opt.name}')),
+                        );
+                      }
+                    } else {
+                      final shouldInstall = await showDialog<bool>(
+                        context: sheetContext,
+                        builder: (ctx) => AlertDialog(
+                          title: Text('Install ${opt.name}?'),
+                          content: Text(
+                            '${opt.name} is not installed yet on your system. Would you like to download and install its packages now?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Install Now'),
+                            ),
+                          ],
+                        ),
                       );
+                      if (shouldInstall == true && context.mounted) {
+                        Navigator.pop(sheetContext);
+                        await state.setSelectedDesktop(opt.id);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const DEInstallScreen()),
+                        );
+                      }
                     }
                   },
                 ),

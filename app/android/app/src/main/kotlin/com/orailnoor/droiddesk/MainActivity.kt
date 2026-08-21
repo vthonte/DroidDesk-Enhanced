@@ -219,8 +219,13 @@ class MainActivity : FlutterActivity() {
                         "rootfsPath" to if (rooted) chrootRuntime.getRootfsPath() else "",
                         "rootfsSizeMB" to if (rooted) chrootRuntime.getRootfsSizeMB() else 0L,
                         "isDirectTermux" to linuxRuntime.useDirectTermux,
-                        "isDirectTermuxAccessible" to linuxRuntime.isDirectTermuxAccessible
+                        "isDirectTermuxAccessible" to linuxRuntime.isDirectTermuxAccessible,
+                        "installedDesktops" to linuxRuntime.getInstalledDesktops()
                     ))
+                }
+
+                "getInstalledDesktops" -> {
+                    result.success(linuxRuntime.getInstalledDesktops())
                 }
 
                 // ── Termux Direct & Import Integration ──

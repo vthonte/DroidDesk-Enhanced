@@ -202,6 +202,16 @@ class LinuxRuntime(private val context: Context) {
         }
     }
 
+    fun getInstalledDesktops(): Map<String, Boolean> {
+        return mapOf(
+            "none" to true,
+            "xfce4" to File(binDir, "xfce4-session").exists(),
+            "lxqt" to File(binDir, "startlxqt").exists(),
+            "mate" to File(binDir, "mate-session").exists(),
+            "kde" to (File(binDir, "startplasma-x11").exists() || File(binDir, "plasmashell").exists())
+        )
+    }
+
     fun getGraphicsMode(): String {
         val freedrenoIcd = File(prefixDir, "share/vulkan/icd.d/freedreno_icd.aarch64.json")
         return if (hasAdrenoGpu() && freedrenoIcd.exists()) {

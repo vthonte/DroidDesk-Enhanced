@@ -225,6 +225,10 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Map<String, bool> _installedDesktops = {'none': true};
+  Map<String, bool> get installedDesktops => _installedDesktops;
+  bool isDesktopInstalled(String de) => _installedDesktops[de] == true || de == 'none';
+
   Future<void> refreshStatus() async {
     try {
       final status = await DroidDeskPlatform.getRuntimeStatus();
@@ -235,6 +239,12 @@ class AppState extends ChangeNotifier {
       _installedDE = status['installedDE']?.toString() ?? '';
       _isDirectTermux = status['isDirectTermux'] == true;
       _isDirectTermuxAvailable = status['isDirectTermuxAccessible'] == true;
+
+      if (status['installedDesktops'] is Map) {
+        _installedDesktops = Map<String, bool>.from(status['installedDesktops'] as Map);
+      } else {
+        _installedDesktops = await DroidDeskPlatform.getInstalledDesktops();
+      }
 
       if (_installedDE.isNotEmpty) {
         await refreshOptionalApps();

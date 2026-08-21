@@ -160,6 +160,14 @@ class DroidDeskPlatform {
         false;
   }
 
+  static Future<Map<String, bool>> getInstalledDesktops() async {
+    final result = await _channel.invokeMethod('getInstalledDesktops');
+    if (result is Map) {
+      return Map<String, bool>.from(result);
+    }
+    return {'none': true};
+  }
+
   static Future<Map<String, bool>> getOptionalApps() async {
     final result = await _channel.invokeMethod('getOptionalApps');
     return Map<String, bool>.from(result);
