@@ -166,7 +166,7 @@ class LinuxRuntime(private val context: Context) {
     private fun hasAdrenoGpu(): Boolean = File("/dev/kgsl-3d0").exists()
 
     private fun normalizedDesktop(desktopEnv: String): String = when (desktopEnv.lowercase()) {
-        "lxqt", "mate", "kde", "xfce4" -> desktopEnv.lowercase()
+        "lxqt", "mate", "kde", "xfce4", "none", "minimal", "terminal" -> desktopEnv.lowercase()
         else -> "xfce4"
     }
 
@@ -1532,6 +1532,20 @@ class LinuxRuntime(private val context: Context) {
             Log.e(TAG, "Native X11 runtime package install failed")
             return false
         }
+
+        if (selectedDesktop in listOf("none", "minimal", "terminal")) {
+            onProgress?.invoke(0.46, "Setting up terminal environment...")
+            installPackageGroup("pkg install -y xfce4-terminal")
+            val nativeTools = "git wget curl openssh htop python clang"
+            onProgress?.invoke(0.80, "Installing Desktop Essentials tools...")
+            installPackageGroup("pkg install -y $nativeTools")
+            compileSocketHook()
+            marker.writeText(selectedDesktop)
+            onProgress?.invoke(1.0, "Terminal / Minimal environment ready")
+            Log.i(TAG, "Terminal / Minimal environment setup complete")
+            return true
+        }
+
         onProgress?.invoke(0.46, "Installing $selectedDesktop desktop packages...")
 
         val desktopPackages = when (selectedDesktop) {
@@ -1996,6 +2010,7 @@ class LinuxRuntime(private val context: Context) {
             "lxqt" -> "startlxqt"
             "mate" -> "mate-session"
             "kde" -> "startplasma-x11"
+            "none", "minimal", "terminal" -> "xfce4-terminal --maximize 2>/dev/null || xterm 2>/dev/null || bash"
             // The Termux startxfce4 wrapper falls back to Android's /bin/sh
             // when an X server already exists, which corrupts DISPLAY on
             // recent Android releases. The session binary starts the same
@@ -2073,12 +2088,19 @@ class LinuxRuntime(private val context: Context) {
 
     /** Wait until the desktop shell processes that paint the first frame exist. */
     fun waitForDesktopReady(desktopEnv: String = "xfce4", timeoutMs: Long = 45_000): Boolean {
-        val processes = when (normalizedDesktop(desktopEnv)) {
+        val norm = normalizedDesktop(desktopEnv)
+        if (norm in listOf("none", "minimal", "terminal")) {
+            Thread.sleep(800)
+            return sessionProcess?.isAlive == true
+        }
+
+        val processes = when (norm) {
             "lxqt" -> listOf("lxqt-session", "lxqt-panel")
             "mate" -> listOf("mate-session", "mate-panel")
             "kde" -> listOf("plasmashell")
             else -> listOf("xfdesktop", "xfce4-panel")
         }
+
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             val check = processes.joinToString(" && ") { "pgrep -x '$it' >/dev/null" }

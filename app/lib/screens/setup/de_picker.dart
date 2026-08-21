@@ -47,6 +47,16 @@ class DEPickerScreen extends StatelessWidget {
       color: Color(0xFF1D99F3),
       recommended: false,
     ),
+    _DEOption(
+      id: 'none',
+      name: 'Terminal / Minimal (No Desktop)',
+      description:
+          'Direct X11 canvas running a high-performance terminal. Zero desktop bloat.',
+      ram: '~15 MB RAM',
+      icon: Icons.terminal_rounded,
+      color: Color(0xFF10B981),
+      recommended: false,
+    ),
   ];
 
   @override
